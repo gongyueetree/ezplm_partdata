@@ -164,7 +164,8 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
     from .urls import UrlFiller
     from .kicad import LibIndex, propose_symbols
 
-    from .settings import LIBINDEX_PATH
+    from .settings import LIBINDEX_PATH, apply_env
+    apply_env()                      # 把设置里的 LLM 提供商/密钥放进环境变量
     log = log or (lambda m: None)
     libindex = libindex or LIBINDEX_PATH
     db = get_session()
@@ -173,6 +174,8 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
     log("构建近邻库（每分类最多 300 条可信物料）…")
     trusted = _trusted_sample(db)
     clf = Classifier(tax, policy=Policy(use_llm=use_llm, auto_fill_min=auto_fill_min, flag_min=flag_min), llm_call=llm_call).fit(trusted)
+    if clf.llm:
+        log(f"LLM 提供商 {clf.llm.provider} / 模型 {clf.llm.model}")
     log(f"近邻库 {len(trusted)} 条；LLM {'开' if (clf.llm and clf.llm.available) else '关'}；符号索引 {'有' if Path(libindex).exists() else '无'}")
     todo_total = db.execute(select(func.count(StagedPart.id)).where(StagedPart.processed_at.is_(None))).scalar() or 0
     pkg = PackageMapper(tax)
@@ -195,12 +198,12 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
             except Exception:
                 pass
         props: list[Proposal] = []
-        props += [clf.classify(p) for p in parts]
-        props += list(pkg.propose(parts, attrs))
-        if idx:
-            props += list(propose_symbols(parts, idx))
-        if urlf:
-            props += list(urlf.propose(parts))
+        for name, fn in (("分类", lambda: [clf.classify(p) for p in parts]), ("封装", lambda: list(pkg.propose(parts, attrs))),
+                         ("符号", lambda: list(propose_symbols(parts, idx)) if idx else []), ("链接", lambda: list(urlf.propose(parts)) if urlf else [])):
+            try:
+                props += fn()
+            except Exception as e:  # noqa  —— 单个模块出错不影响本批其它模块
+                log(f"  ! {name}模块出错，本批跳过该模块：{str(e)[:200]}")
         for pr in props:
             if pr.action == "ok":
                 continue

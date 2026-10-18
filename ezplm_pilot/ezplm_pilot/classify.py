@@ -148,11 +148,15 @@ class LlmArbiter:
     返回 JSON：{"category_id": ..., "confidence": 0~1, "reason": ...}
     """
 
-    def __init__(self, tax: Taxonomy, call=None, model: str | None = None):
+    def __init__(self, tax: Taxonomy, call=None, model: str | None = None, provider: str | None = None):
         self.tax = tax
-        self.model = model or os.environ.get("EZPLM_LLM_MODEL", "claude-haiku-4-5")
-        self.call = call or self._anthropic_call
-        self.available = call is not None or bool(os.environ.get("ANTHROPIC_API_KEY"))
+        self.provider = (provider or os.environ.get("EZPLM_LLM_PROVIDER", "anthropic")).lower()
+        default_model = {"anthropic": "claude-haiku-4-5", "gemini": "gemini-2.5-flash", "openai": "gpt-4o-mini"}.get(self.provider, "claude-haiku-4-5")
+        self.model = model or os.environ.get("EZPLM_LLM_MODEL") or default_model
+        calls = {"anthropic": self._anthropic_call, "gemini": self._gemini_call, "openai": self._openai_call}
+        self.call = call or calls.get(self.provider, self._anthropic_call)
+        keys = {"anthropic": "ANTHROPIC_API_KEY", "gemini": "GEMINI_API_KEY", "openai": "OPENAI_API_KEY"}
+        self.available = call is not None or bool(os.environ.get(keys.get(self.provider, "ANTHROPIC_API_KEY")))
         self.n_calls = 0
 
     def _anthropic_call(self, prompt: str) -> str:
@@ -160,6 +164,25 @@ class LlmArbiter:
         client = anthropic.Anthropic()
         msg = client.messages.create(model=self.model, max_tokens=300, messages=[{"role": "user", "content": prompt}])
         return msg.content[0].text
+
+    def _gemini_call(self, prompt: str) -> str:
+        """Google Gemini（REST，无需额外 SDK）。模型如 gemini-2.5-flash / gemini-2.5-flash-lite。"""
+        import requests
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        r = requests.post(url, params={"key": os.environ["GEMINI_API_KEY"]}, timeout=60,
+                          json={"contents": [{"parts": [{"text": prompt}]}],
+                                "generationConfig": {"temperature": 0, "maxOutputTokens": 300, "responseMimeType": "application/json"}})
+        r.raise_for_status()
+        return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+    def _openai_call(self, prompt: str) -> str:
+        """OpenAI 兼容接口（OpenAI / DeepSeek / 通义千问 / 智谱等），可设 OPENAI_BASE_URL。"""
+        import requests
+        base = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        r = requests.post(f"{base}/chat/completions", headers={"Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"}, timeout=60,
+                          json={"model": self.model, "temperature": 0, "max_tokens": 300, "messages": [{"role": "user", "content": prompt}]})
+        r.raise_for_status()
+        return r.json()["choices"][0]["message"]["content"]
 
     def arbitrate(self, p: Part, candidates: list[str]) -> Candidate | None:
         if not self.available:

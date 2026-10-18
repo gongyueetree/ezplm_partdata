@@ -257,13 +257,16 @@ SETTINGS = """{% extends "base" %}{% block body %}
 <label>Token（留空=不修改；已保存：{{ '是' if cfg.api_token else '否' }}）{% if env.api_token %}<span class=mute>（当前由环境变量提供）</span>{% endif %}</label><input name=api_token type=password style="width:100%">
 <label>每页条数（ezPLM 上限 100）</label><input name=api_page_size value="{{ cfg.api_page_size }}">
 <h2 style="margin-top:18px">LLM 仲裁</h2>
+<div class=row><div><label>提供商</label><select name=llm_provider><option value=gemini {{ 'selected' if cfg.llm_provider=='gemini' }}>Google Gemini</option><option value=anthropic {{ 'selected' if cfg.llm_provider=='anthropic' }}>Anthropic Claude</option><option value=openai {{ 'selected' if cfg.llm_provider=='openai' }}>OpenAI 兼容（DeepSeek/通义/智谱…）</option></select></div>
+<div><label>模型（Gemini: gemini-2.5-flash；Claude: claude-haiku-4-5；DeepSeek: deepseek-chat）</label><input name=llm_model value="{{ cfg.llm_model }}" style="width:100%"></div></div>
+<label>Gemini API Key（留空=不修改；已保存：{{ '是' if cfg.gemini_api_key else '否' }}）</label><input name=gemini_api_key type=password style="width:100%">
 <label>Anthropic API Key（留空=不修改；已保存：{{ '是' if cfg.anthropic_api_key else '否' }}）</label><input name=anthropic_api_key type=password style="width:100%">
-<label>模型</label><input name=llm_model value="{{ cfg.llm_model }}">
+<div class=row><div><label>OpenAI 兼容 API Key（已保存：{{ '是' if cfg.openai_api_key else '否' }}）</label><input name=openai_api_key type=password style="width:100%"></div><div><label>OpenAI 兼容 Base URL（如 https://api.deepseek.com/v1）</label><input name=openai_base_url value="{{ cfg.openai_base_url }}" style="width:100%"></div></div>
 <h2 style="margin-top:18px">阈值</h2>
 <div class=row><div><label>自动写入最低置信度</label><input name=auto_fill_min value="{{ cfg.auto_fill_min }}"></div><div><label>标记疑似错误最低置信度</label><input name=flag_min value="{{ cfg.flag_min }}"></div></div>
 <div class=row><div><label>拉取每批</label><input name=ingest_batch value="{{ cfg.ingest_batch }}"></div><div><label>处理每批</label><input name=process_batch value="{{ cfg.process_batch }}"></div></div>
 <p><button class=pri>保存</button></p></form></div>
-<div class=panel><h2>连接测试</h2><form method=post action="/settings/test"><button>测试 ezPLM API</button></form>{% if test %}<pre>{{ test }}</pre>{% endif %}
+<div class=panel><h2>连接测试</h2><form class=inline method=post action="/settings/test"><button>测试 ezPLM API</button></form> <form class=inline method=post action="/settings/test-llm"><button>测试 LLM</button></form>{% if test %}<pre>{{ test }}</pre>{% endif %}
 <h2 style="margin-top:18px">运行环境</h2><table class=kv>
 <tr><td>数据库</td><td>{{ dbinfo }}</td></tr><tr><td>数据目录</td><td>{{ data_dir }}</td></tr><tr><td>登录保护</td><td>{{ '已开启（ADMIN_PASSWORD）' if auth_on else '未开启——部署到公网前请设置 ADMIN_PASSWORD' }}</td></tr>
 <tr><td>规则文件</td><td>config/rules.yaml（分类）、config/packages.yaml（封装映射）、config/manufacturers.yaml（URL 模板）——改完提交到 GitHub 重新部署即可生效</td></tr></table></div></div>
@@ -606,6 +609,22 @@ def settings_test(user: str = Depends(auth)):
         out = json.dumps(r, ensure_ascii=False, indent=1)
     except Exception as e:  # noqa
         out = f"连接失败：{e}"
+    return RedirectResponse(f"/settings?test={out}", status_code=303)
+
+
+@app.post("/settings/test-llm")
+def settings_test_llm(user: str = Depends(auth)):
+    from .classify import LlmArbiter
+    try:
+        cfg = settings.apply_env()
+        arb = LlmArbiter(pipeline.load_taxonomy(get_session()), provider=cfg["llm_provider"], model=cfg["llm_model"])
+        if not arb.available:
+            out = f"未配置 {cfg['llm_provider']} 的 API Key"
+        else:
+            txt = arb.call('只输出 JSON：{"ok": true, "model": "<你的模型名>"}')
+            out = f"{cfg['llm_provider']} / {cfg['llm_model']} 响应：{txt[:300]}"
+    except Exception as e:  # noqa
+        out = f"LLM 调用失败：{e}"
     return RedirectResponse(f"/settings?test={out}", status_code=303)
 
 
