@@ -35,6 +35,7 @@ HERE = Path(__file__).resolve().parent.parent
 class Policy:
     auto_fill_min: float = 0.85
     flag_min: float = 0.85
+    propose_min: float = 0.30        # 低于此置信度的猜测不生成建议（避免噪声进复核队列）
     knn_k: int = 7
     llm_band: tuple = (0.45, 0.85)   # 置信度落在此区间 → 送 LLM 仲裁
     use_llm: bool = True
@@ -189,9 +190,54 @@ class LlmArbiter:
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 
+    def _ask(self, prompt: str) -> dict | None:
+        self.n_calls += 1
+        try:
+            txt = self.call(prompt)
+            return json.loads(re.search(r"\{.*\}", txt, re.S).group(0))
+        except Exception as e:  # noqa
+            self.n_errors += 1
+            self.last_error = str(e)[:200]
+            return None
+
+    def _part_block(self, p: Part) -> str:
+        return (f"制造商：{p.manufacturer}\n型号：{p.mpn}\n描述：{p.description}\n英文描述：{p.description_en}\n"
+                f"现有符号：{p.symbol or '无'}；封装：{p.footprint or '无'}")
+
+    def arbitrate_open(self, p: Part) -> Candidate | None:
+        """无候选时的两步开放式分类：先选一级分类，再在其叶子里选。"""
+        if not self.available:
+            return None
+        roots = [n for n in self.tax.nodes.values() if not n.parent]
+        opts = "\n".join(f"{i+1}. {n.name}" for i, n in enumerate(roots))
+        js = self._ask("你是电子元器件分类专家。根据器件信息选出最合适的一级分类；若无法判断返回 0。\n" + self._part_block(p) +
+                       f"\n\n一级分类：\n{opts}\n\n只输出 JSON：{{\"index\": <序号>, \"confidence\": <0到1>}}")
+        if not js or not js.get("index"):
+            return Candidate("", 0.0, "llm:none", {"step": "root"})
+        try:
+            root = roots[int(js["index"]) - 1]
+        except Exception:
+            return Candidate("", 0.0, "llm:none", {"step": "root"})
+        leaves = [(cid, path) for cid, path in self.tax.leaf_labels() if cid in self.tax.nodes and self.tax.root_of(cid) == root.id]
+        if not leaves:
+            return Candidate("", 0.0, "llm:none", {"step": "leaf"})
+        opts = "\n".join(f"{i+1}. {path.split(' > ', 1)[-1]}" for i, (cid, path) in enumerate(leaves))
+        js2 = self._ask(f"器件已判定属于一级分类「{root.name}」。请在下列子分类中选出最合适的一个；若都不合适返回 0。\n" + self._part_block(p) +
+                        f"\n\n子分类：\n{opts}\n\n只输出 JSON：{{\"index\": <序号>, \"confidence\": <0到1>, \"reason\": \"<一句话>\"}}")
+        if not js2 or not js2.get("index"):
+            return Candidate("", 0.0, "llm:none", {"step": "leaf", "root": root.name})
+        try:
+            cid = leaves[int(js2["index"]) - 1][0]
+        except Exception:
+            return Candidate("", 0.0, "llm:none", {"step": "leaf"})
+        conf = min(float(js.get("confidence", 0.7)), float(js2.get("confidence", 0.7)))
+        return Candidate(cid, round(conf, 3), "llm", {"reason": js2.get("reason", ""), "model": self.model, "mode": "open-2step"})
+
     def arbitrate(self, p: Part, candidates: list[str]) -> Candidate | None:
         if not self.available:
             return None
+        if not candidates:
+            return self.arbitrate_open(p)
         cands = list(dict.fromkeys(candidates))
         # 补充同父的兄弟叶子，最多 8 个
         for cid in list(cands):
@@ -262,8 +308,7 @@ class Classifier:
         if kv:
             cands.append(kv)
         merged = self._merge(cands)
-        lo, hi = self.policy.llm_band
-        if self.llm and (merged is None or lo <= merged.conf < hi or (merged and p.category_id and merged.category_id != p.category_id)):
+        if self.llm and (merged is None or merged.conf < self.policy.auto_fill_min or (p.category_id and merged.category_id != p.category_id)):
             seed = [c.category_id for c in cands if c.category_id] + ([p.category_id] if p.category_id else [])
             lv = self.llm.arbitrate(p, seed)
             if lv and lv.category_id:
@@ -283,12 +328,17 @@ class Classifier:
         pol = self.policy
         label = self.tax.path(c.category_id)
         if not p.category_id:
-            action = "auto_fill" if c.conf >= pol.auto_fill_min else "review"
-            tags = ["自动分类"] if action == "auto_fill" else ["待分类"]
+            if c.conf >= pol.auto_fill_min:
+                action, tags = "auto_fill", ["自动分类"]
+            elif c.conf >= pol.propose_min:
+                action, tags = "review", ["待分类"]
+            else:
+                action, tags = "skip", ["待分类"]          # 猜测太弱，只打标签不出建议
         elif c.category_id == p.category_id:
             action, tags = "ok", []
-        else:
-            action = "flag_mismatch" if c.conf >= pol.flag_min else "review"
-            tags = ["分类疑似错误"] if action == "flag_mismatch" else ["分类待复核"]
+        elif c.conf >= pol.flag_min:
+            action, tags = "flag_mismatch", ["分类疑似错误"]
             c.evidence["current_path"] = self.tax.path(p.category_id)
+        else:
+            action, tags = "ok", []                          # 已有分类且无把握推翻 → 不打扰
         return Proposal(p.id, p.mpn, "category_id", p.category_id, c.category_id, label, c.conf, action, c.method, c.evidence, tags)
