@@ -228,12 +228,53 @@ CATEGORIES = """{% extends "base" %}{% block body %}
 <ul>{% for r in roots %}{{ node(r) }}{% endfor %}</ul></div>
 {% endblock %}"""
 
-LIBRARY = """{% extends "base" %}{% block body %}
-<form class=filters method=get><input name=q value="{{ q }}" placeholder="符号/封装名、库名" style="width:260px"><select name=kind><option value=symbols {{ 'selected' if kind=='symbols' }}>符号</option><option value=footprints {{ 'selected' if kind=='footprints' }}>封装</option></select><button class=pri>搜索</button><span class=mute>索引：符号 {{ stats.symbols }} / 封装 {{ stats.footprints }} / 工程元件实例 {{ stats.instances }}</span></form>
-{% if kind=='symbols' %}<table><tr><th>符号</th><th>库</th><th>引脚数</th><th>默认封装</th><th>MPN 字段</th><th>来源</th><th>可信级</th><th>License</th></tr>
-{% for r in rows %}<tr><td><b>{{ r[0] }}</b></td><td>{{ r[1] }}</td><td>{{ r[2] }}</td><td class=mute>{{ r[3] }}</td><td class=mute>{{ r[4] }}</td><td class=mute style="max-width:300px;word-break:break-all">{{ r[5] }}</td><td>{{ r[6] }}</td><td>{{ r[7] }}</td></tr>{% endfor %}</table>
-{% else %}<table><tr><th>封装</th><th>库</th><th>焊盘数</th><th>类型</th><th>3D</th><th>来源</th><th>可信级</th></tr>
-{% for r in rows %}<tr><td><b>{{ r[0] }}</b></td><td>{{ r[1] }}</td><td>{{ r[2] }}</td><td>{{ r[3] }}</td><td class=mute>{{ '有' if r[4] else '' }}</td><td class=mute style="max-width:300px;word-break:break-all">{{ r[5] }}</td><td>{{ r[6] }}</td></tr>{% endfor %}</table>{% endif %}
+LIBRARY = """{% extends "base" %}{% block topright %}<a class=btn href="/library/upload">导入符号 / 封装 / 工程</a>{% endblock %}{% block body %}
+<div class=cards>
+<div class=card><div class=n>{{ f.total }}</div><div class=l>{{ '符号' if kind=='symbols' else '封装' }}总数</div></div>
+<div class=card><div class=n>{{ f.with_mpn }}</div><div class=l>已关联 MPN</div></div>
+<div class=card><div class=n>{{ f.without_mpn }}</div><div class=l>未关联 MPN（通用件或待补）</div></div>
+<div class=card><div class=n>{{ stats.instances }}</div><div class=l>工程元件实例（MPN 来源）</div></div>
+</div>
+<form class=filters method=get>
+<select name=kind onchange="this.form.submit()"><option value=symbols {{ 'selected' if kind=='symbols' }}>符号</option><option value=footprints {{ 'selected' if kind=='footprints' }}>封装</option></select>
+<input name=q value="{{ q }}" placeholder="名称 / 库名 / MPN" style="width:220px">
+<select name=has_mpn><option value="">— MPN —</option><option value=1 {{ 'selected' if has_mpn=='1' }}>有 MPN</option><option value=0 {{ 'selected' if has_mpn=='0' }}>无 MPN</option></select>
+<select name=lib><option value="">— 库 / 分类 —</option>{% for l in f.libs %}<option {{ 'selected' if lib==l }}>{{ l }}</option>{% endfor %}</select>
+<select name=source_kind><option value="">— 来源级别 —</option>{% for k in f.kinds %}<option {{ 'selected' if source_kind==k }}>{{ k }}</option>{% endfor %}</select>
+<button class=pri>筛选</button><span class=mute>共 {{ total }} 条</span></form>
+{% if kind=='symbols' %}<table><tr><th>符号</th><th>库 / 分类</th><th>引脚</th><th>默认封装</th><th>MPN 数</th><th>来源</th><th>级别</th><th>License</th></tr>
+{% for r in rows %}<tr><td><a href="/library/symbols/{{ r[0] }}"><b>{{ r[1] }}</b></a></td><td>{{ r[2] }}</td><td>{{ r[6] }}</td><td class=mute>{{ r[7] }}</td><td>{{ r[10] }}</td><td class=mute style="max-width:260px;word-break:break-all">{{ r[3].split('/sources/')[-1] }}</td><td>{{ r[4] }}</td><td>{{ r[5] }}</td></tr>{% endfor %}</table>
+{% else %}<table><tr><th>封装</th><th>库 / 分类</th><th>焊盘</th><th>类型</th><th>3D</th><th>MPN 数</th><th>来源</th><th>级别</th></tr>
+{% for r in rows %}<tr><td><a href="/library/footprints/{{ r[0] }}"><b>{{ r[1] }}</b></a></td><td>{{ r[2] }}</td><td>{{ r[6] }}</td><td>{{ r[7] }}</td><td class=mute>{{ '有' if r[8] else '' }}</td><td>{{ r[10] }}</td><td class=mute style="max-width:260px;word-break:break-all">{{ r[3].split('/sources/')[-1] }}</td><td>{{ r[4] }}</td></tr>{% endfor %}</table>{% endif %}
+<div class=pager>{% if page>1 %}<a href="?{{ qs }}&page={{ page-1 }}">上一页</a>{% endif %}<span>第 {{ page }} / {{ ((total-1)//size)+1 if total else 1 }} 页</span>{% if page*size<total %}<a href="?{{ qs }}&page={{ page+1 }}">下一页</a>{% endif %}</div>
+{% endblock %}"""
+
+LIBITEM = """{% extends "base" %}{% block topright %}<a class=btn href="/library?kind={{ kind }}">← 返回列表</a>{% endblock %}{% block body %}
+<div class=grid2>
+<div class=panel><h2>基本信息</h2><table class=kv>
+<tr><td>库 / 分类</td><td>{{ d.lib }}</td></tr><tr><td>来源</td><td style="word-break:break-all">{{ d.source }}（{{ d.source_kind }}，commit {{ d.commit_ or '-' }}）</td></tr><tr><td>License</td><td>{{ d.license or '未知' }}</td></tr>
+{% if kind=='symbols' %}<tr><td>引脚数</td><td>{{ d.pin_count }}</td></tr><tr><td>默认封装</td><td>{{ d.footprint_field }}</td></tr><tr><td>数据手册</td><td>{{ d.datasheet }}</td></tr><tr><td>派生自</td><td>{{ d.extends or '-' }}</td></tr><tr><td>关键词</td><td>{{ d.keywords }}</td></tr>
+{% else %}<tr><td>焊盘数</td><td>{{ d.pad_count }}</td></tr><tr><td>类型</td><td>{{ d.attr }}</td></tr><tr><td>3D 模型</td><td>{{ d.model3d or '-' }}</td></tr><tr><td>标签</td><td>{{ d.tags }}</td></tr>{% endif %}
+<tr><td>描述</td><td>{{ d.description }}</td></tr></table>
+{% if kind=='symbols' and d.pins_list %}<h2>引脚（{{ d.pins_list|length }}）</h2><div style="max-height:260px;overflow:auto"><table><tr><th>编号</th><th>名称</th><th>类型</th></tr>{% for pin in d.pins_list %}<tr><td>{{ pin[0] }}</td><td>{{ pin[1] }}</td><td class=mute>{{ pin[2] }}</td></tr>{% endfor %}</table></div>{% endif %}</div>
+<div class=panel><h2>关联的 MPN（{{ mpns|length }}）</h2>
+<p class=mute>一个{{ '符号' if kind=='symbols' else '封装' }}可对应多个料号。来源：symbol-field = 符号自带 MPN 字段；project-instance = 开源工程里的元件实例；manual = 人工添加。</p>
+<table><tr><th>MPN</th><th>制造商</th><th>来源</th><th>添加时间</th><th></th></tr>
+{% for m in mpns %}<tr><td><b>{{ m[0] }}</b></td><td class=mute>{{ m[1] }}</td><td class=mute>{{ m[2] }}</td><td class=mute>{{ m[3] }}</td><td><form class=inline method=post action="/library/{{ kind }}/{{ d.rowid }}/mpn/del"><input type=hidden name=mpn value="{{ m[0] }}"><button class=bad>删除</button></form></td></tr>{% endfor %}</table>
+<form class=frm method=post action="/library/{{ kind }}/{{ d.rowid }}/mpn/add"><div class=row><div><label>添加 MPN（可多个，逗号分隔）</label><input name=mpn style="width:100%" placeholder="如 MCP6004T-I/ST, MCP6004-E/SL"></div><div><label>制造商（可选）</label><input name=manufacturer></div></div><p><button class=pri>添加</button></p></form></div></div>
+{% endblock %}"""
+
+LIBUPLOAD = """{% extends "base" %}{% block topright %}<a class=btn href="/library">← 返回列表</a>{% endblock %}{% block body %}
+<div class=grid2><div class=panel><h2>上传文件</h2>
+<p class=mute>支持：单个 <code>.kicad_sym</code>（符号库）、<code>.kicad_mod</code>（封装）、或把整个 KiCad 工程/库目录打成的 <code>.zip</code>（会递归解析其中的 .kicad_sym / .kicad_mod / .kicad_sch / .kicad_pcb；原理图里的元件实例会自动产生 符号↔MPN、封装↔MPN 映射）。Altium / EasyEDA 请先转成 KiCad 格式再上传。</p>
+<form class=frm method=post action="/library/upload" enctype=multipart/form-data>
+<label>文件</label><input type=file name=file required>
+<div class=row><div><label>来源标签（用于区分，如 "ST评估板-2026"）</label><input name=label required placeholder="来源名称"></div>
+<div><label>可信级别</label><select name=source_kind>{% for k in ['vendor-official','kicad-official','lcsc-easyeda','digikey-library','oshw-product','community'] %}<option value="{{ k }}" {{ 'selected' if k=='oshw-product' }}>{{ k }}</option>{% endfor %}</select></div></div>
+<label>License（可选，如 CC-BY-SA-4.0 / MIT）</label><input name=license>
+<p><button class=pri {{ 'disabled' if busy }}>上传并解析</button></p></form></div>
+<div class=panel><h2>已导入的来源</h2><table><tr><th>来源</th><th>符号</th><th>封装</th><th>实例</th></tr>{% for r in sources %}<tr><td style="word-break:break-all">{{ r[0] }}</td><td>{{ r[1] }}</td><td>{{ r[2] }}</td><td>{{ r[3] }}</td></tr>{% endfor %}</table>
+<p class=mute style="margin-top:12px">批量来源（Git 仓库）请在"任务控制 → ③ 扫描"里克隆。</p></div></div>
 {% endblock %}"""
 
 EXPORT = """{% extends "base" %}{% block body %}
@@ -274,7 +315,7 @@ SETTINGS = """{% extends "base" %}{% block body %}
 {% endblock %}"""
 
 env = Environment(loader=DictLoader({"base": BASE, "home": HOME, "jobs": JOBS, "parts": PARTS, "part": PART, "review": REVIEW,
-                                     "categories": CATEGORIES, "library": LIBRARY, "export": EXPORT, "settings": SETTINGS}), autoescape=True)
+                                     "categories": CATEGORIES, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS}), autoescape=True)
 env.globals["pct"] = lambda a, b: round(100.0 * (a or 0) / b, 1) if b else 0
 
 
@@ -536,17 +577,115 @@ def categories(request: Request, user: str = Depends(auth)):
 
 
 @app.get("/library", response_class=HTMLResponse)
-def library(request: Request, q: str = "", kind: str = "symbols", user: str = Depends(auth)):
-    rows, stats = [], {"symbols": 0, "footprints": 0, "instances": 0}
-    if settings.LIBINDEX_PATH.exists():
-        con = sqlite3.connect(str(settings.LIBINDEX_PATH))
-        stats = _lib_stats()
-        like = f"%{q}%"
-        if kind == "symbols":
-            rows = con.execute("select name, lib, pin_count, footprint_field, mpn_field, source, source_kind, license from symbols where name like ? or lib like ? or mpn_field like ? order by name limit 300", (like, like, like)).fetchall()
-        else:
-            rows = con.execute("select name, lib, pad_count, attr, model3d, source, source_kind from footprints where name like ? or lib like ? order by name limit 300", (like, like)).fetchall()
-    return render("library", request, title="符号 / 封装库", nav="library", user=user, rows=rows, q=q, kind=kind, stats=stats)
+def library(request: Request, q: str = "", kind: str = "symbols", has_mpn: str = "", lib: str = "", source_kind: str = "", page: int = 1, size: int = 50, user: str = Depends(auth)):
+    from .kicad import LibIndex
+    idx = LibIndex(settings.LIBINDEX_PATH)
+    total, rows = idx.list_items(kind, q, has_mpn, lib, source_kind, page, size)
+    qs = f"kind={kind}&q={q}&has_mpn={has_mpn}&lib={lib}&source_kind={source_kind}"
+    return render("library", request, title="符号 / 封装库", nav="library", user=user, rows=rows, total=total, page=page, size=size, q=q, kind=kind,
+                  has_mpn=has_mpn, lib=lib, source_kind=source_kind, f=idx.facets(kind), stats=idx.stats(), qs=qs)
+
+
+@app.get("/library/upload", response_class=HTMLResponse)
+def library_upload_page(request: Request, user: str = Depends(auth)):
+    from .kicad import LibIndex
+    idx = LibIndex(settings.LIBINDEX_PATH)
+    src = idx.con.execute("""select src, sum(s) as s, sum(f) as f, sum(i) as i from (
+        select substr(source, 1, instr(source || '/', '/sources/') + 40) as src, 1 as s, 0 as f, 0 as i from symbols
+        union all select substr(source, 1, instr(source || '/', '/sources/') + 40), 0, 1, 0 from footprints
+        union all select substr(source, 1, instr(source || '/', '/sources/') + 40), 0, 0, 1 from instances) group by src order by s desc""").fetchall()
+    sources = []
+    for r in src:
+        seg = r[0].split("/sources/")[-1].split("/")[0] if "/sources/" in r[0] else r[0]
+        sources.append((seg, r[1], r[2], r[3]))
+    merged: dict = {}
+    for name, a, b, c in sources:
+        m = merged.setdefault(name, [0, 0, 0]); m[0] += a; m[1] += b; m[2] += c
+    return render("libupload", request, title="导入符号 / 封装", nav="library", user=user, sources=[(k, *v) for k, v in merged.items()])
+
+
+@app.post("/library/upload")
+async def library_upload(request: Request, user: str = Depends(auth)):
+    import zipfile
+    form = await request.form()
+    up = form.get("file")
+    label = re.sub(r"[^A-Za-z0-9_.一-龥-]", "-", (form.get("label") or "upload").strip())[:60]
+    kind = form.get("source_kind", "community")
+    lic = (form.get("license") or "").strip()
+    if up is None or not getattr(up, "filename", ""):
+        return back("/library/upload", "请选择文件", True)
+    dest = settings.SOURCES_DIR / "uploads" / label
+    dest.mkdir(parents=True, exist_ok=True)
+    fname = Path(up.filename).name
+    data = await up.read()
+    if fname.lower().endswith(".zip"):
+        tmp = dest / fname
+        tmp.write_bytes(data)
+        with zipfile.ZipFile(tmp) as z:
+            for m in z.infolist():
+                n = m.filename
+                if n.startswith("__MACOSX") or ".." in n or n.startswith("/"):
+                    continue
+                if n.endswith(("/",)):
+                    continue
+                if not n.lower().endswith((".kicad_sym", ".kicad_mod", ".kicad_sch", ".kicad_pcb", ".kicad_pro", ".wrl", ".step", ".stp")):
+                    continue
+                target = dest / n
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(z.read(m))
+        tmp.unlink(missing_ok=True)
+    elif fname.lower().endswith((".kicad_sym", ".kicad_mod", ".kicad_sch", ".kicad_pcb")):
+        sub = dest / ("footprints.pretty" if fname.lower().endswith(".kicad_mod") else "")
+        sub.mkdir(parents=True, exist_ok=True)
+        (sub / fname).write_bytes(data)
+    else:
+        return back("/library/upload", "不支持的文件类型", True)
+    if lic:
+        (dest / "LICENSE").write_text(lic, encoding="utf-8")
+
+    def run(job):
+        from .kicad import LibIndex, scan
+        job.say(f"解析 {dest} …")
+        res = scan(dest, kind)
+        idx = LibIndex(settings.LIBINDEX_PATH)
+        idx.add(res)
+        for e in res["errors"][:10]:
+            job.say(f"  ! {e['file']}: {e['error']}")
+        return {"symbols": len(res["symbols"]), "footprints": len(res["footprints"]), "instances": len(res["instances"]), "errors": len(res["errors"]), "index": idx.stats()}
+    try:
+        manager.start("scan-upload", run, {"label": label, "file": fname, "kind": kind})
+    except RuntimeError as e:
+        return back("/library/upload", str(e), True)
+    return back("/jobs", f"已上传 {fname}，正在解析入库")
+
+
+@app.get("/library/{kind}/{rowid}", response_class=HTMLResponse)
+def library_item(request: Request, kind: str, rowid: int, user: str = Depends(auth)):
+    from .kicad import LibIndex
+    if kind not in ("symbols", "footprints"):
+        raise HTTPException(404)
+    idx = LibIndex(settings.LIBINDEX_PATH)
+    d = idx.get_item(kind, rowid)
+    if not d:
+        raise HTTPException(404)
+    return render("libitem", request, title=f"{'符号' if kind=='symbols' else '封装'} · {d['name']}", nav="library", user=user, kind=kind, d=d, mpns=idx.mpns(kind, rowid))
+
+
+@app.post("/library/{kind}/{rowid}/mpn/{op}")
+async def library_mpn(request: Request, kind: str, rowid: int, op: str, user: str = Depends(auth)):
+    from .kicad import LibIndex
+    f = await request.form()
+    idx = LibIndex(settings.LIBINDEX_PATH)
+    if op == "add":
+        n = 0
+        for m in re.split(r"[,，;；\n]+", f.get("mpn") or ""):
+            if m.strip():
+                idx.add_mpn(kind, rowid, m.strip(), (f.get("manufacturer") or "").strip(), "manual"); n += 1
+        return back(f"/library/{kind}/{rowid}", f"已添加 {n} 个 MPN")
+    if op == "del":
+        idx.del_mpn(kind, rowid, f.get("mpn") or "")
+        return back(f"/library/{kind}/{rowid}", "已删除")
+    raise HTTPException(400)
 
 
 # ---- 回写

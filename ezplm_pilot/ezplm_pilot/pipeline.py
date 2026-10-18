@@ -162,7 +162,7 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
     from .classify import Classifier, Policy
     from .packages import PackageMapper
     from .urls import UrlFiller
-    from .kicad import LibIndex, propose_symbols
+    from .kicad import LibIndex, propose_symbols, propose_footprints_by_mpn
 
     from .settings import LIBINDEX_PATH, apply_env
     apply_env()                      # 把设置里的 LLM 提供商/密钥放进环境变量
@@ -221,7 +221,8 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
             except Exception:
                 pass
         props: list[Proposal] = []
-        for name, fn in (("分类", lambda: [clf.classify(p) for p in parts]), ("封装", lambda: list(pkg.propose(parts, attrs))),
+        for name, fn in (("分类", lambda: [clf.classify(p) for p in parts]), ("封装(MPN映射)", lambda: list(propose_footprints_by_mpn(parts, idx)) if idx else []),
+                         ("封装", lambda: list(pkg.propose(parts, attrs))),
                          ("符号", lambda: list(propose_symbols(parts, idx)) if idx else []), ("链接", lambda: list(urlf.propose(parts)) if urlf else [])):
             try:
                 props += fn()
