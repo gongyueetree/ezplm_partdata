@@ -17,16 +17,21 @@ LIBINDEX_PATH = DATA_DIR / "libindex.sqlite"
 DEFAULTS = {
     "api_base": "https://www.ezplm.cn/admin-api",
     "api_token": "",
-    "api_page_size": "200",
-    "llm_model": "claude-haiku-4-5",
+    "api_page_size": "100",
+    "llm_provider": "gemini",
+    "llm_model": "gemini-2.5-flash",
     "anthropic_api_key": "",
+    "gemini_api_key": "",
+    "openai_api_key": "",
+    "openai_base_url": "",
     "auto_fill_min": "0.85",
     "flag_min": "0.85",
     "process_batch": "200",
     "ingest_batch": "500",
 }
-ENV_MAP = {"api_base": "EZPLM_API_BASE", "api_token": "EZPLM_API_TOKEN", "anthropic_api_key": "ANTHROPIC_API_KEY", "llm_model": "EZPLM_LLM_MODEL"}
-SECRET_KEYS = {"api_token", "anthropic_api_key"}
+ENV_MAP = {"api_base": "EZPLM_API_BASE", "api_token": "EZPLM_API_TOKEN", "anthropic_api_key": "ANTHROPIC_API_KEY", "gemini_api_key": "GEMINI_API_KEY",
+           "openai_api_key": "OPENAI_API_KEY", "openai_base_url": "OPENAI_BASE_URL", "llm_model": "EZPLM_LLM_MODEL", "llm_provider": "EZPLM_LLM_PROVIDER"}
+SECRET_KEYS = {"api_token", "anthropic_api_key", "gemini_api_key", "openai_api_key"}
 
 
 def db_url() -> str:
@@ -75,10 +80,9 @@ def set_many(values: dict):
 def apply_env():
     """把设置里的 key 放进环境变量，供 LLM SDK 等使用。"""
     s = get_all()
-    if s.get("anthropic_api_key") and not os.environ.get("ANTHROPIC_API_KEY"):
-        os.environ["ANTHROPIC_API_KEY"] = s["anthropic_api_key"]
-    if s.get("llm_model"):
-        os.environ["EZPLM_LLM_MODEL"] = s["llm_model"]
+    for k, env in ENV_MAP.items():
+        if s.get(k) and k not in ("api_base", "api_token"):
+            os.environ[env] = s[k]
     return s
 
 

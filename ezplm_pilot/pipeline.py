@@ -73,7 +73,7 @@ def apply_proposal(db, sp: StagedPart, pr: StagedProposal, tax: Taxonomy | None 
 
 # --------------------------------------------------------------------------- ingest
 def ingest(source, batch: int = 500, max_batches: int | None = None, job: str | None = None, reset: bool = False,
-           stop=None, log=None, progress=None) -> dict:
+           stop=None, log=None, progress=None, incremental: bool = False) -> dict:
     """source: sources.SampleSource / CsvSource / ApiSource。ApiSource 走游标续跑。
     stop(): 返回 True 时在当前批次后停止；log(msg) 日志回调；progress(dict) 进度回调。"""
     log = log or (lambda m: None)
@@ -87,21 +87,33 @@ def ingest(source, batch: int = 500, max_batches: int | None = None, job: str | 
     if reset:
         _set_state(db, "ingest:page", "1"); db.commit()
 
-    n_total, n_new, batch_no, buf = 0, 0, 0, []
-    start_page = int(_state(db, "ingest:page", "1"))
+    n_total, n_new, n_changed, batch_no, buf = 0, 0, 0, 0, []
+    start_page = 1 if incremental else int(_state(db, "ingest:page", "1"))
+    if incremental:
+        log("只拉新增模式：从第 1 页开始，遇到整批都已存在即停止")
     it = source.iter_parts(start_page=start_page) if hasattr(source, "iter_parts") and "start_page" in source.iter_parts.__code__.co_varnames else source.iter_parts()
 
     def flush():
-        nonlocal buf, batch_no, n_new
+        nonlocal buf, batch_no, n_new, n_changed
         if not buf:
-            return
+            return 0
         batch_no += 1
         ids = [p.id for p in buf]
         existing = {r.id: r for r in db.execute(select(StagedPart).where(StagedPart.id.in_(ids))).scalars()}
+        batch_new = 0
         for p in buf:
             sp = existing.get(p.id)
             if sp is None:
-                sp = StagedPart(id=p.id); db.add(sp); n_new += 1
+                sp = StagedPart(id=p.id); db.add(sp); n_new += 1; batch_new += 1
+            else:
+                # 原值变更检测：ezPLM 那边已经填上、而平台也给了新值 → 打标签提示复核
+                changed = []
+                for fld, orig_col, new_col, val in (("分类", "orig_category_id", "new_category_id", p.category_id), ("符号", "orig_symbol", "new_symbol", p.symbol),
+                                                    ("封装", "orig_footprint", "new_footprint", p.footprint), ("链接", "orig_url", "new_url", p.url)):
+                    if val and val != (getattr(sp, orig_col) or "") and getattr(sp, new_col):
+                        changed.append(fld)
+                if changed:
+                    _add_tags(sp, ["原值已变更"]); n_changed += 1
             sp.mpn, sp.manufacturer, sp.manufacturer_id = p.mpn, p.manufacturer, p.manufacturer_id
             sp.description, sp.description_en, sp.status = p.description, p.description_en, p.status
             sp.orig_category_id, sp.orig_category = p.category_id, p.category
@@ -111,22 +123,26 @@ def ingest(source, batch: int = 500, max_batches: int | None = None, job: str | 
             sp.value_score = value_score(p)
             sp.fetched_at = datetime.utcnow()
         db.add(JobLog(job=job, stage="ingest", batch_no=batch_no, n_items=len(buf), finished_at=datetime.utcnow()))
-        if getattr(source, "current_page", None):
+        if getattr(source, "current_page", None) and not incremental:
             _set_state(db, "ingest:page", source.current_page)
         db.commit()
-        log(f"批次 {batch_no}: 写入 {len(buf)} 条（新 {n_new}，累计 {n_total}）；下次从第 {_state(db, 'ingest:page', '1')} 页续")
+        log(f"批次 {batch_no}: 写入 {len(buf)} 条（新 {batch_new}，累计新 {n_new}，原值变更 {n_changed}）" + ("" if incremental else f"；下次从第 {_state(db, 'ingest:page', '1')} 页续"))
         if progress:
             progress({"done": n_total, "total": getattr(source, "total", 0) or 0})
         buf = []
+        return batch_new
 
     for p in it:
         buf.append(p); n_total += 1
         if len(buf) >= batch:
-            flush()
+            bn = flush()
+            if incremental and bn == 0:
+                log("整批都已存在，新增同步完成"); break
             if (max_batches and batch_no >= max_batches) or (stop and stop()):
                 break
     flush()
-    return {"job": job, "fetched": n_total, "new": n_new, "batches": batch_no, "parts_in_staging": db.execute(select(func.count(StagedPart.id))).scalar()}
+    return {"job": job, "fetched": n_total, "new": n_new, "orig_changed": n_changed, "batches": batch_no,
+            "parts_in_staging": db.execute(select(func.count(StagedPart.id))).scalar()}
 
 
 # --------------------------------------------------------------------------- process
@@ -148,7 +164,8 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
     from .urls import UrlFiller
     from .kicad import LibIndex, propose_symbols
 
-    from .settings import LIBINDEX_PATH
+    from .settings import LIBINDEX_PATH, apply_env
+    apply_env()                      # 把设置里的 LLM 提供商/密钥放进环境变量
     log = log or (lambda m: None)
     libindex = libindex or LIBINDEX_PATH
     db = get_session()
@@ -157,6 +174,8 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
     log("构建近邻库（每分类最多 300 条可信物料）…")
     trusted = _trusted_sample(db)
     clf = Classifier(tax, policy=Policy(use_llm=use_llm, auto_fill_min=auto_fill_min, flag_min=flag_min), llm_call=llm_call).fit(trusted)
+    if clf.llm:
+        log(f"LLM 提供商 {clf.llm.provider} / 模型 {clf.llm.model}")
     log(f"近邻库 {len(trusted)} 条；LLM {'开' if (clf.llm and clf.llm.available) else '关'}；符号索引 {'有' if Path(libindex).exists() else '无'}")
     todo_total = db.execute(select(func.count(StagedPart.id)).where(StagedPart.processed_at.is_(None))).scalar() or 0
     pkg = PackageMapper(tax)
@@ -179,12 +198,12 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
             except Exception:
                 pass
         props: list[Proposal] = []
-        props += [clf.classify(p) for p in parts]
-        props += list(pkg.propose(parts, attrs))
-        if idx:
-            props += list(propose_symbols(parts, idx))
-        if urlf:
-            props += list(urlf.propose(parts))
+        for name, fn in (("分类", lambda: [clf.classify(p) for p in parts]), ("封装", lambda: list(pkg.propose(parts, attrs))),
+                         ("符号", lambda: list(propose_symbols(parts, idx)) if idx else []), ("链接", lambda: list(urlf.propose(parts)) if urlf else [])):
+            try:
+                props += fn()
+            except Exception as e:  # noqa  —— 单个模块出错不影响本批其它模块
+                log(f"  ! {name}模块出错，本批跳过该模块：{str(e)[:200]}")
         for pr in props:
             if pr.action == "ok":
                 continue
@@ -269,10 +288,25 @@ def export(out_path: str | Path | None = None, apply: bool = False, api=None, ba
     with open(out_path, "w", encoding="utf-8") as f:
         for u in updates:
             f.write(json.dumps(u, ensure_ascii=False) + "\n")
-    applied = 0
+    applied, dropped = 0, 0
     if apply and api:
         for i in range(0, len(updates), batch):
             chunk = updates[i:i + batch]
+            # 回写前逐条核对 ezPLM 当前值：只填仍为空的字段，不覆盖同事后来手工填的内容
+            verified = []
+            for u in chunk:
+                try:
+                    live = api.get_part(u["id"])
+                except Exception as e:  # noqa
+                    log(f"  ! {u['mpn']} 读取当前值失败，跳过：{e}"); dropped += 1; continue
+                keep = {k: v for k, v in u["set"].items() if not live.get(k)}
+                if len(keep) < len(u["set"]):
+                    dropped += len(u["set"]) - len(keep)
+                if keep:
+                    verified.append({**u, "set": keep})
+            if not verified:
+                continue
+            chunk = verified
             api.patch_parts([{k: v for k, v in u.items() if k != "mpn"} for u in chunk])
             now = datetime.utcnow()
             for u in chunk:
@@ -284,9 +318,9 @@ def export(out_path: str | Path | None = None, apply: bool = False, api=None, ba
                 progress({"done": applied, "total": len(updates)})
             if stop and stop():
                 break
-    db.add(JobLog(job=job, stage="export", batch_no=0, n_items=len(updates), finished_at=datetime.utcnow(), detail=json.dumps({"applied": applied, "held_pending_review": held})))
+    db.add(JobLog(job=job, stage="export", batch_no=0, n_items=len(updates), finished_at=datetime.utcnow(), detail=json.dumps({"applied": applied, "held_pending_review": held, "dropped_nonempty": dropped})))
     db.commit()
-    return {"job": job, "ready": len(updates), "held_pending_review": held, "applied": applied, "file": str(out_path)}
+    return {"job": job, "ready": len(updates), "held_pending_review": held, "applied": applied, "skipped_fields_already_filled": dropped, "file": str(out_path)}
 
 
 # --------------------------------------------------------------------------- dashboard numbers

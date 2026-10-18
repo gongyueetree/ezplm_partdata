@@ -101,6 +101,10 @@ class ApiSource:
     def _get(self, path: str, **params):
         import requests
         r = requests.get(f"{self.base}{path}", params=params, headers={"Authorization": f"Bearer {self.token}"}, timeout=60)
+        if r.status_code == 400 and params.get("pageSize", 0) and int(params["pageSize"]) > 100:
+            self.page_size = 100                       # ezPLM 后台每页上限 100
+            params["pageSize"] = 100
+            r = requests.get(f"{self.base}{path}", params=params, headers={"Authorization": f"Bearer {self.token}"}, timeout=60)
         r.raise_for_status()
         return r.json()
 
@@ -158,6 +162,14 @@ class ApiSource:
         js = self._get("/partlibs", current=1, pageSize=1)
         data = js.get("data", js)
         return {"ok": True, "total": data.get("total"), "sample": (data.get("data") or data.get("items") or [None])[0]}
+
+    def get_part(self, part_id: str) -> dict:
+        """读取单条当前值，返回与回写 set 同名的键：categoryId/symbol/footprint/url/datasheetUrl。"""
+        d = self._get(f"/partlibs/{part_id}").get("data", {})
+        cat, sym, fp, pdf = d.get("category") or {}, d.get("symbol") or {}, d.get("footprint") or {}, d.get("pdf") or {}
+        return {"categoryId": cat.get("id") if isinstance(cat, dict) else cat, "symbol": sym.get("name") if isinstance(sym, dict) else sym,
+                "footprint": fp.get("name") if isinstance(fp, dict) else fp, "url": d.get("url") or "",
+                "datasheetUrl": (pdf.get("url") if isinstance(pdf, dict) else pdf) or ""}
 
     def patch_parts(self, updates: list[dict]) -> dict:
         import requests

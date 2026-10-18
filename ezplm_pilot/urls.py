@@ -19,13 +19,16 @@ UA = "Mozilla/5.0 (compatible; ezPLM-datafill/0.1; +https://www.ezplm.cn)"
 
 
 def _fill(tpl: str, mpn: str, gpn_re: str | None = None) -> str:
+    mpn = (mpn or "").strip()
     base = re.sub(r"\(.*?\)", "", mpn).strip()
     base = SUFFIX_RE.sub("", base) if len(SUFFIX_RE.sub("", base)) >= 4 else base
     series = re.match(r"^[A-Za-z]+\d+", base)
     # 通用料号 GPN：优先用厂商专属正则（取 group 1），否则去掉结尾的封装/温度码（1~4 个字母 + 可选数字）
     m = re.match(gpn_re, base, re.I) if gpn_re else None
-    gpn = m.group(1) if m else re.sub(r"-?[A-Za-z]{1,4}\d?$", "", base)
-    if len(gpn) < 4:
+    gpn = next((g for g in m.groups() if g), None) if m else None     # 多分支正则：取第一个命中的分组
+    if not gpn:
+        gpn = re.sub(r"-?[A-Za-z]{1,4}\d?$", "", base)
+    if not gpn or len(gpn) < 4:
         gpn = base
     return tpl.format(mpn=mpn, mpn_lower=mpn.lower(), mpn_base=base, mpn_base_lower=base.lower(),
                       mpn_url=urllib.parse.quote(mpn, safe=""), mpn_series=(series.group(0).lower() if series else base.lower()),
@@ -39,6 +42,8 @@ class UrlFiller:
         self.timeout, self.workers, self.sleep = timeout, workers, sleep
 
     def candidates(self, p: Part) -> list[dict]:
+        if not p.mpn or len(p.mpn.strip()) < 3:
+            return []
         for pat, r in self.rules:
             if pat.search(p.manufacturer or ""):
                 out, seen = [], set()

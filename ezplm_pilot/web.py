@@ -116,6 +116,7 @@ JOBS = """{% extends "base" %}{% block body %}
 <div class=row><div><label>数据源</label><select name=source><option value=api>ezPLM API（设置里配置）</option><option value=sample>内置样本（演示）</option></select></div>
 <div><label>每批条数</label><input name=batch value="{{ cfg.ingest_batch }}"></div><div><label>最多批次（空=全部）</label><input name=max_batches placeholder="如 20"></div></div>
 <label><input type=checkbox name=reset value=1> 从第 1 页重新开始（否则从上次页码续）</label>
+<label><input type=checkbox name=incremental value=1> <b>只拉新增</b>：从第 1 页开始，遇到整批都已存在即停（全量拉完后每天点一次，同步同事新上传的器件）</label>
 <p><button class=pri {{ 'disabled' if busy }}>开始拉取</button> <span class=mute>当前续跑页码：{{ s.ingest_page }}</span></p></form></div>
 
 <div class=panel><h2>② 处理（process）</h2>
@@ -254,15 +255,18 @@ SETTINGS = """{% extends "base" %}{% block body %}
 <div class=panel><h2>ezPLM 连接</h2><form class=frm method=post action="/settings">
 <label>API 地址</label><input name=api_base value="{{ cfg.api_base }}" style="width:100%">
 <label>Token（留空=不修改；已保存：{{ '是' if cfg.api_token else '否' }}）{% if env.api_token %}<span class=mute>（当前由环境变量提供）</span>{% endif %}</label><input name=api_token type=password style="width:100%">
-<label>每页条数</label><input name=api_page_size value="{{ cfg.api_page_size }}">
+<label>每页条数（ezPLM 上限 100）</label><input name=api_page_size value="{{ cfg.api_page_size }}">
 <h2 style="margin-top:18px">LLM 仲裁</h2>
+<div class=row><div><label>提供商</label><select name=llm_provider><option value=gemini {{ 'selected' if cfg.llm_provider=='gemini' }}>Google Gemini</option><option value=anthropic {{ 'selected' if cfg.llm_provider=='anthropic' }}>Anthropic Claude</option><option value=openai {{ 'selected' if cfg.llm_provider=='openai' }}>OpenAI 兼容（DeepSeek/通义/智谱…）</option></select></div>
+<div><label>模型（Gemini: gemini-2.5-flash；Claude: claude-haiku-4-5；DeepSeek: deepseek-chat）</label><input name=llm_model value="{{ cfg.llm_model }}" style="width:100%"></div></div>
+<label>Gemini API Key（留空=不修改；已保存：{{ '是' if cfg.gemini_api_key else '否' }}）</label><input name=gemini_api_key type=password style="width:100%">
 <label>Anthropic API Key（留空=不修改；已保存：{{ '是' if cfg.anthropic_api_key else '否' }}）</label><input name=anthropic_api_key type=password style="width:100%">
-<label>模型</label><input name=llm_model value="{{ cfg.llm_model }}">
+<div class=row><div><label>OpenAI 兼容 API Key（已保存：{{ '是' if cfg.openai_api_key else '否' }}）</label><input name=openai_api_key type=password style="width:100%"></div><div><label>OpenAI 兼容 Base URL（如 https://api.deepseek.com/v1）</label><input name=openai_base_url value="{{ cfg.openai_base_url }}" style="width:100%"></div></div>
 <h2 style="margin-top:18px">阈值</h2>
 <div class=row><div><label>自动写入最低置信度</label><input name=auto_fill_min value="{{ cfg.auto_fill_min }}"></div><div><label>标记疑似错误最低置信度</label><input name=flag_min value="{{ cfg.flag_min }}"></div></div>
 <div class=row><div><label>拉取每批</label><input name=ingest_batch value="{{ cfg.ingest_batch }}"></div><div><label>处理每批</label><input name=process_batch value="{{ cfg.process_batch }}"></div></div>
 <p><button class=pri>保存</button></p></form></div>
-<div class=panel><h2>连接测试</h2><form method=post action="/settings/test"><button>测试 ezPLM API</button></form>{% if test %}<pre>{{ test }}</pre>{% endif %}
+<div class=panel><h2>连接测试</h2><form class=inline method=post action="/settings/test"><button>测试 ezPLM API</button></form> <form class=inline method=post action="/settings/test-llm"><button>测试 LLM</button></form>{% if test %}<pre>{{ test }}</pre>{% endif %}
 <h2 style="margin-top:18px">运行环境</h2><table class=kv>
 <tr><td>数据库</td><td>{{ dbinfo }}</td></tr><tr><td>数据目录</td><td>{{ data_dir }}</td></tr><tr><td>登录保护</td><td>{{ '已开启（ADMIN_PASSWORD）' if auth_on else '未开启——部署到公网前请设置 ADMIN_PASSWORD' }}</td></tr>
 <tr><td>规则文件</td><td>config/rules.yaml（分类）、config/packages.yaml（封装映射）、config/manufacturers.yaml（URL 模板）——改完提交到 GitHub 重新部署即可生效</td></tr></table></div></div>
@@ -310,10 +314,10 @@ def jobs_page(request: Request, user: str = Depends(auth)):
                   history=[h.to_dict() for h in manager.history], lib=_lib_stats(), sources=sources)
 
 
-def _run_ingest(job, source, batch, max_batches, reset):
+def _run_ingest(job, source, batch, max_batches, reset, incremental=False):
     from .sources import SampleSource
     src = settings.api_source() if source == "api" else SampleSource()
-    return pipeline.ingest(src, batch=batch, max_batches=max_batches, reset=reset, job=job.id,
+    return pipeline.ingest(src, batch=batch, max_batches=max_batches, reset=reset, job=job.id, incremental=incremental,
                            stop=job.should_stop, log=job.say, progress=lambda p: job.progress.update(p))
 
 
@@ -359,8 +363,8 @@ async def jobs_start(request: Request, user: str = Depends(auth)):
     try:
         mb = int(f["max_batches"]) if f.get("max_batches") else None
         if kind == "ingest":
-            manager.start("ingest", lambda j: _run_ingest(j, f.get("source", "api"), int(f.get("batch") or 500), mb, bool(f.get("reset"))),
-                          {"source": f.get("source"), "batch": f.get("batch"), "max_batches": mb, "reset": bool(f.get("reset"))})
+            manager.start("ingest", lambda j: _run_ingest(j, f.get("source", "api"), int(f.get("batch") or 500), mb, bool(f.get("reset")), bool(f.get("incremental"))),
+                          {"source": f.get("source"), "batch": f.get("batch"), "max_batches": mb, "reset": bool(f.get("reset")), "incremental": bool(f.get("incremental"))})
         elif kind == "process":
             manager.start("process", lambda j: _run_process(j, int(f.get("batch") or 200), mb, bool(f.get("llm")), bool(f.get("urls"))),
                           {"batch": f.get("batch"), "max_batches": mb, "llm": bool(f.get("llm")), "urls": bool(f.get("urls"))})
@@ -605,6 +609,22 @@ def settings_test(user: str = Depends(auth)):
         out = json.dumps(r, ensure_ascii=False, indent=1)
     except Exception as e:  # noqa
         out = f"连接失败：{e}"
+    return RedirectResponse(f"/settings?test={out}", status_code=303)
+
+
+@app.post("/settings/test-llm")
+def settings_test_llm(user: str = Depends(auth)):
+    from .classify import LlmArbiter
+    try:
+        cfg = settings.apply_env()
+        arb = LlmArbiter(pipeline.load_taxonomy(get_session()), provider=cfg["llm_provider"], model=cfg["llm_model"])
+        if not arb.available:
+            out = f"未配置 {cfg['llm_provider']} 的 API Key"
+        else:
+            txt = arb.call('只输出 JSON：{"ok": true, "model": "<你的模型名>"}')
+            out = f"{cfg['llm_provider']} / {cfg['llm_model']} 响应：{txt[:300]}"
+    except Exception as e:  # noqa
+        out = f"LLM 调用失败：{e}"
     return RedirectResponse(f"/settings?test={out}", status_code=303)
 
 
