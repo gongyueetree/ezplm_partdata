@@ -23,7 +23,7 @@ from sqlalchemy import func, or_, select
 
 from . import pipeline, settings
 from .jobs import manager
-from .staging import StagedCategory, StagedPart, StagedProposal, get_session
+from .staging import CategoryParam, StagedCategory, StagedPart, StagedProposal, get_session
 
 app = FastAPI(title="ezPLM 暂存数据平台")
 security = HTTPBasic(auto_error=False)
@@ -222,10 +222,32 @@ REVIEW = """{% extends "base" %}{% block body %}
 <div class=pager>{% if page>1 %}<a href="?{{ qs }}&page={{ page-1 }}">上一页</a>{% endif %}<span>第 {{ page }} 页</span>{% if page*size<total %}<a href="?{{ qs }}&page={{ page+1 }}">下一页</a>{% endif %}</div>
 {% endblock %}"""
 
-CATEGORIES = """{% extends "base" %}{% block body %}
-<p class=mute>括号内：原分类物料数 / 新分类物料数。分类树来自 ezPLM（ingest 时同步）。</p>
-<div class="panel tree">{% macro node(n) %}<li>{{ n.name }} <span class=cnt>({{ counts.get(n.id, 0) }} / {{ ncounts.get(n.id, 0) }})</span>{% if n.children %}<ul>{% for c in n.children %}{{ node(c) }}{% endfor %}</ul>{% endif %}</li>{% endmacro %}
+CATEGORIES = """{% extends "base" %}{% block topright %}<form class=inline method=post action="/jobs/start"><input type=hidden name=kind value=params><button {{ 'disabled' if busy }}>让模型为所有叶子分类生成（跳过已有）</button></form> <form class=inline method=post action="/categories/seed"><button class=pri>挂载内置参数建议（补齐缺失）</button></form> <form class=inline method=post action="/categories/seed?replace=1" onsubmit="return confirm('用最新内置模板刷新所有“内置建议”来源的参数？人工/模型参数不受影响。')"><button>刷新内置建议</button></form> <a class=btn href="/categories/params.json">导出全部参数 JSON</a>{% endblock %}{% block body %}
+<p class=mute>括号内：原分类物料数 / 新分类物料数。"关键参数（N）"点击进入编辑；已有 {{ n_with }} 个分类配置了参数（内置建议 {{ n_seed }} 个，人工/模型 {{ n_with - n_seed }} 个）。内置建议在拉取分类树后自动挂上，可直接编辑；编辑保存后来源变为“人工”，不会再被内置模板覆盖。</p>
+<div class="panel tree">{% macro node(n) %}<li>{{ n.name }} <span class=cnt>({{ counts.get(n.id, 0) }} / {{ ncounts.get(n.id, 0) }})</span>
+ <a href="/categories/{{ n.id }}/params" style="margin-left:8px;color:{{ '#9ca3af' if not pcounts.get(n.id) else ('#059669' if pseed.get(n.id) else '#2563eb') }}">关键参数（{{ pcounts.get(n.id, 0) }}）</a>{% if n.children %}<ul>{% for c in n.children %}{{ node(c) }}{% endfor %}</ul>{% endif %}</li>{% endmacro %}
 <ul>{% for r in roots %}{{ node(r) }}{% endfor %}</ul></div>
+{% endblock %}"""
+
+PARAMS = """{% extends "base" %}{% block topright %}<a class=btn href="/categories">← 返回分类树</a>{% endblock %}{% block body %}
+<p class=mute>{{ path }} · 物料 {{ n_parts }} 条。选型这一类器件时要问的参数，以及此类器件常见的取值范围。</p>
+<form method=post action="/categories/{{ cid }}/params" id=pf>
+<table id=ptable><tr><th>参数</th><th>键</th><th>类型</th><th>单位</th><th>常见取值</th><th>优先级</th><th>来源</th><th></th></tr>
+{% for r in rows %}<tr>
+<td><input name=name value="{{ r.name }}" style="width:190px"></td><td><input name=key value="{{ r.key }}" style="width:120px"></td>
+<td><select name=ptype>{% for k,l in ptypes.items() %}<option value="{{ k }}" {{ 'selected' if r.ptype==k }}>{{ l }}</option>{% endfor %}</select></td>
+<td><input name=unit value="{{ r.unit }}" style="width:60px"></td>
+<td><input name=vmin value="{{ r.vmin }}" style="width:90px" placeholder="最小"> – <input name=vmax value="{{ r.vmax }}" style="width:90px" placeholder="最大"><br><input name=values value="{{ r['values'] }}" style="width:200px;margin-top:3px" placeholder="多选一的取值，逗号分隔"></td>
+<td><select name=priority>{% for k,l in prios.items() %}<option value="{{ k }}" {{ 'selected' if r.priority==k }}>{{ l }}</option>{% endfor %}</select></td>
+<td class=mute><input type=hidden name=source value="{{ r.source }}">{{ {'model':'模型建议','seed':'内置建议'}.get(r.source, '人工') }}</td>
+<td><button type=button onclick="this.closest('tr').remove()">✕</button></td></tr>{% endfor %}
+</table>
+<p><button type=button onclick="addRow()">＋ 添加参数</button> <button class=pri>保存参数</button>
+<button formaction="/categories/{{ cid }}/params/suggest" formmethod=post {{ 'disabled' if not llm_ok }}>让模型建议（追加到表格，需保存）</button>
+<button formaction="/categories/{{ cid }}/params/suggest?replace=1" formmethod=post {{ 'disabled' if not llm_ok }} onclick="return confirm('用模型建议替换现有参数？（仍需保存）')">让模型重新生成</button>
+{% if not llm_ok %}<span class=mute>（设置里配置 LLM 后可用）</span>{% endif %}</p></form>
+<template id=rowtpl><tr><td><input name=name style="width:190px"></td><td><input name=key style="width:120px"></td><td><select name=ptype>{% for k,l in ptypes.items() %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></td><td><input name=unit style="width:60px"></td><td><input name=vmin style="width:90px" placeholder="最小"> – <input name=vmax style="width:90px" placeholder="最大"><br><input name=values style="width:200px;margin-top:3px" placeholder="多选一的取值"></td><td><select name=priority>{% for k,l in prios.items() %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></td><td class=mute><input type=hidden name=source value=manual>人工</td><td><button type=button onclick="this.closest('tr').remove()">✕</button></td></tr></template>
+<script>function addRow(){document.getElementById('ptable').appendChild(document.getElementById('rowtpl').content.cloneNode(true))}</script>
 {% endblock %}"""
 
 LIBRARY = """{% extends "base" %}{% block topright %}<a class=btn href="/library/upload">导入符号 / 封装 / 工程</a>{% endblock %}{% block body %}
@@ -235,6 +257,7 @@ LIBRARY = """{% extends "base" %}{% block topright %}<a class=btn href="/library
 <div class=card><div class=n>{{ f.without_mpn }}</div><div class=l>未关联 MPN（通用件或待补）</div></div>
 <div class=card><div class=n>{{ stats.instances }}</div><div class=l>工程元件实例（MPN 来源）</div></div>
 </div>
+{% if not data_mounted %}<div class="msg err">⚠ /data 不是持久化磁盘卷，索引会在重新部署时清空。请在 Railway 服务 → Settings → Volumes 挂载 /data，然后重新扫描。</div>{% endif %}
 <form class=filters method=get>
 <select name=kind onchange="this.form.submit()"><option value=symbols {{ 'selected' if kind=='symbols' }}>符号</option><option value=footprints {{ 'selected' if kind=='footprints' }}>封装</option></select>
 <input name=q value="{{ q }}" placeholder="名称 / 库名 / MPN" style="width:220px">
@@ -310,12 +333,12 @@ SETTINGS = """{% extends "base" %}{% block body %}
 <p><button class=pri>保存</button></p></form></div>
 <div class=panel><h2>连接测试</h2><form class=inline method=post action="/settings/test"><button>测试 ezPLM API</button></form> <form class=inline method=post action="/settings/test-llm"><button>测试 LLM</button></form>{% if test %}<pre>{{ test }}</pre>{% endif %}
 <h2 style="margin-top:18px">运行环境</h2><table class=kv>
-<tr><td>数据库</td><td>{{ dbinfo }}</td></tr><tr><td>数据目录</td><td>{{ data_dir }}</td></tr><tr><td>登录保护</td><td>{{ '已开启（ADMIN_PASSWORD）' if auth_on else '未开启——部署到公网前请设置 ADMIN_PASSWORD' }}</td></tr>
+<tr><td>数据库</td><td>{{ dbinfo }}</td></tr><tr><td>数据目录</td><td>{{ data_dir }}{% if not data_mounted %} <span style="color:var(--bad)">⚠ 不是持久化磁盘卷：每次重新部署会清空符号/封装索引和克隆的库。请在 Railway 服务 → Settings → Volumes 挂载到 {{ data_dir }}</span>{% endif %}</td></tr><tr><td>登录保护</td><td>{{ '已开启（ADMIN_PASSWORD）' if auth_on else '未开启——部署到公网前请设置 ADMIN_PASSWORD' }}</td></tr>
 <tr><td>规则文件</td><td>config/rules.yaml（分类）、config/packages.yaml（封装映射）、config/manufacturers.yaml（URL 模板）——改完提交到 GitHub 重新部署即可生效</td></tr></table></div></div>
 {% endblock %}"""
 
 env = Environment(loader=DictLoader({"base": BASE, "home": HOME, "jobs": JOBS, "parts": PARTS, "part": PART, "review": REVIEW,
-                                     "categories": CATEGORIES, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS}), autoescape=True)
+                                     "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS}), autoescape=True)
 env.globals["pct"] = lambda a, b: round(100.0 * (a or 0) / b, 1) if b else 0
 
 
@@ -340,6 +363,13 @@ def home(request: Request, user: str = Depends(auth)):
 
 
 # ---- 任务
+def _data_mounted() -> bool:
+    d = str(settings.DATA_DIR)
+    if d in (".", "/app", "/home/claude", "/home/claude/ezplm_pilot") or not d.startswith("/data"):
+        return True          # 本地运行不提示
+    return os.path.ismount(d)
+
+
 def _lib_stats():
     from .kicad import LibIndex
     try:
@@ -416,6 +446,13 @@ async def jobs_start(request: Request, user: str = Depends(auth)):
             manager.start("scan", lambda j: _run_scan(j, f["path"].strip(), f.get("source_kind", "community")), {"path": f["path"], "kind": f.get("source_kind")})
         elif kind == "export":
             manager.start("export", lambda j: _run_export(j, False), {"apply": False})
+        elif kind == "params":
+            from . import params as P
+            call = _llm_call_or_none()
+            if not call:
+                return back("/categories", "请先在设置里配置 LLM", True)
+            manager.start("params", lambda j: P.bulk_generate(call, only_missing=True, stop=j.should_stop, log=j.say, progress=lambda p: j.progress.update(p)), {"only_missing": True})
+            return back("/jobs", "已启动：为所有叶子分类生成关键参数建议")
         else:
             return back("/jobs", "未知任务类型", True)
     except RuntimeError as e:
@@ -564,16 +601,107 @@ def review_do(rid: int, decision: str, next: str = "", user: str = Depends(auth)
 # ---- 分类 / 库
 @app.get("/categories", response_class=HTMLResponse)
 def categories(request: Request, user: str = Depends(auth)):
+    from . import params as P
     db = get_session()
     tax = pipeline.load_taxonomy(db)
     counts = dict(db.execute(select(StagedPart.orig_category_id, func.count()).group_by(StagedPart.orig_category_id)).all())
     ncounts = dict(db.execute(select(StagedPart.new_category_id, func.count()).where(StagedPart.new_category_id.isnot(None)).group_by(StagedPart.new_category_id)).all())
+    pcounts = P.counts(db)
+    pseed = dict(db.execute(select(CategoryParam.category_id, func.count()).where(CategoryParam.source == "seed").group_by(CategoryParam.category_id)).all())
 
     def build(nid):
         n = tax.nodes[nid]
         return {"name": n.name, "id": n.id, "children": [build(c) for c in n.children]}
     roots = [build(n.id) for n in tax.nodes.values() if not n.parent]
-    return render("categories", request, title="分类", nav="categories", user=user, roots=roots, counts=counts, ncounts=ncounts)
+    return render("categories", request, title="分类与关键参数", nav="categories", user=user, roots=roots, counts=counts, ncounts=ncounts, pcounts=pcounts, pseed=pseed, n_with=len(pcounts), n_seed=len(pseed))
+
+
+@app.post("/categories/seed")
+def categories_seed(replace: str = "", user: str = Depends(auth)):
+    from . import params as P
+    try:
+        st = P.seed_load(get_session(), replace_seed=bool(replace))
+    except Exception as e:  # noqa
+        return back("/categories", f"挂载失败：{str(e)[:150]}", True)
+    return back("/categories", f"已为 {st['seeded']} 个分类挂上内置参数建议，跳过 {st['skipped']} 个（已有人工/模型参数）")
+
+
+@app.on_event("startup")
+def _seed_on_startup():
+    """启动时自动给没有参数的叶子分类挂上内置建议（分类树尚未拉取时静默跳过）。"""
+    try:
+        from . import params as P
+        st = P.seed_load(get_session())
+        if st["seeded"]:
+            print(f"[params] 内置参数建议已挂到 {st['seeded']} 个分类")
+    except Exception as e:  # noqa
+        print("[params] seed skipped:", e)
+
+
+def _llm_call_or_none():
+    from .classify import LlmArbiter
+    cfg = settings.apply_env()
+    arb = LlmArbiter(pipeline.load_taxonomy(get_session()), provider=cfg["llm_provider"], model=cfg["llm_model"])
+    return arb.call if arb.available else None
+
+
+@app.get("/categories/params.json")
+def params_export(user: str = Depends(auth)):
+    from . import params as P
+    db = get_session()
+    return JSONResponse(P.export_all(db, pipeline.load_taxonomy(db)), headers={"Content-Disposition": "attachment; filename=category_params.json"})
+
+
+@app.get("/categories/{cid}/params", response_class=HTMLResponse)
+def params_page(request: Request, cid: str, user: str = Depends(auth)):
+    from . import params as P
+    db = get_session()
+    tax = pipeline.load_taxonomy(db)
+    if cid not in tax.nodes:
+        raise HTTPException(404)
+    rows = [dict(name=r.name, key=r.key, ptype=r.ptype, unit=r.unit, vmin=r.vmin, vmax=r.vmax, values=r.values, priority=r.priority, source=r.source) for r in P.list_params(db, cid)]
+    extra = request.query_params.get("suggest")
+    if extra:
+        try:
+            sug = json.loads(_SUGGEST_CACHE.pop(extra, "[]"))
+            rows = (rows if request.query_params.get("mode") != "replace" else []) + sug
+        except Exception:
+            pass
+    n_parts = db.execute(select(func.count(StagedPart.id)).where((StagedPart.new_category_id == cid) | (StagedPart.orig_category_id == cid))).scalar()
+    return render("params", request, title=f"关键参数 · {tax.nodes[cid].name}", nav="categories", user=user, cid=cid, path=tax.path(cid), rows=rows,
+                  ptypes=P.PTYPES, prios=P.PRIORITIES, n_parts=n_parts, llm_ok=_llm_call_or_none() is not None)
+
+
+_SUGGEST_CACHE: dict = {}
+
+
+@app.post("/categories/{cid}/params")
+async def params_save(request: Request, cid: str, user: str = Depends(auth)):
+    from . import params as P
+    f = await request.form()
+    cols = ("name", "key", "ptype", "unit", "vmin", "vmax", "values", "priority", "source")
+    lists = {c: f.getlist(c) for c in cols}
+    n = max(len(v) for v in lists.values()) if lists else 0
+    rows = [{c: (lists[c][i] if i < len(lists[c]) else "") for c in cols} for i in range(n)]
+    P.save_params(get_session(), cid, rows)
+    return back(f"/categories/{cid}/params", f"已保存 {len([r for r in rows if r['name'].strip()])} 个参数")
+
+
+@app.post("/categories/{cid}/params/suggest")
+def params_suggest(cid: str, replace: str = "", user: str = Depends(auth)):
+    from . import params as P
+    call = _llm_call_or_none()
+    if not call:
+        return back(f"/categories/{cid}/params", "未配置 LLM", True)
+    db = get_session()
+    tax = pipeline.load_taxonomy(db)
+    try:
+        rows = P.suggest_params(tax, cid, call, P._sample_descriptions(db, cid))
+    except Exception as e:  # noqa
+        return back(f"/categories/{cid}/params", f"模型建议失败：{str(e)[:150]}", True)
+    token = secrets.token_hex(6)
+    _SUGGEST_CACHE[token] = json.dumps(rows, ensure_ascii=False)
+    return RedirectResponse(f"/categories/{cid}/params?suggest={token}&mode={'replace' if replace else 'append'}&msg=模型给出 {len(rows)} 个参数，请检查后点保存", status_code=303)
 
 
 @app.get("/library", response_class=HTMLResponse)
@@ -583,7 +711,7 @@ def library(request: Request, q: str = "", kind: str = "symbols", has_mpn: str =
     total, rows = idx.list_items(kind, q, has_mpn, lib, source_kind, page, size)
     qs = f"kind={kind}&q={q}&has_mpn={has_mpn}&lib={lib}&source_kind={source_kind}"
     return render("library", request, title="符号 / 封装库", nav="library", user=user, rows=rows, total=total, page=page, size=size, q=q, kind=kind,
-                  has_mpn=has_mpn, lib=lib, source_kind=source_kind, f=idx.facets(kind), stats=idx.stats(), qs=qs)
+                  has_mpn=has_mpn, lib=lib, source_kind=source_kind, f=idx.facets(kind), stats=idx.stats(), qs=qs, data_mounted=_data_mounted())
 
 
 @app.get("/library/upload", response_class=HTMLResponse)
@@ -736,7 +864,7 @@ def settings_page(request: Request, user: str = Depends(auth)):
     url = settings.db_url()
     dbinfo = "SQLite：" + url.split("///")[-1] if url.startswith("sqlite") else "PostgreSQL：" + re.sub(r"//.*@", "//***@", url)
     return render("settings", request, title="设置", nav="settings", user=user, cfg=settings.get_all(), env={k: bool(os.environ.get(v)) for k, v in settings.ENV_MAP.items()},
-                  test=request.query_params.get("test", ""), dbinfo=dbinfo, data_dir=str(settings.DATA_DIR), auth_on=bool(os.environ.get("ADMIN_PASSWORD") or os.environ.get("EZPLM_WEB_PASSWORD")))
+                  test=request.query_params.get("test", ""), dbinfo=dbinfo, data_dir=str(settings.DATA_DIR), data_mounted=_data_mounted(), auth_on=bool(os.environ.get("ADMIN_PASSWORD") or os.environ.get("EZPLM_WEB_PASSWORD")))
 
 
 @app.post("/settings")

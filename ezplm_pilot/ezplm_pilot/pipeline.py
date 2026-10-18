@@ -84,6 +84,13 @@ def ingest(source, batch: int = 500, max_batches: int | None = None, job: str | 
     for n in tax.nodes.values():
         db.merge(StagedCategory(id=n.id, parent=n.parent or None, depth=n.depth, name=n.name))
     db.commit()
+    try:                                       # 新分类自动挂上内置关键参数建议
+        from .params import seed_load
+        st = seed_load(db, load_taxonomy(db))
+        if st["seeded"]:
+            log(f"已为 {st['seeded']} 个分类挂上内置关键参数建议")
+    except Exception as e:  # noqa
+        log(f"内置参数挂载跳过：{str(e)[:100]}")
     if reset:
         _set_state(db, "ingest:page", "1"); db.commit()
 
