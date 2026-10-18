@@ -1,0 +1,9 @@
+demo-0001 ¦ ESP32-S3 ¦ 乐鑫信息科技（上海）股份有限公司 ¦ 无线微控制器（MCU） ¦ 019f83a7-530b-7737-b576-88e050e99469 ¦ ¦ ¦ t ¦ 1 ¦ Wi-Fi + BLE 5 双核 Xtensa LX7 SoC，QFN-56
+demo-0002 ¦ ESP32-C3 ¦ 乐鑫信息科技（上海）股份有限公司 ¦ 无线微控制器（MCU） ¦ 019f83a7-530b-7737-b576-88e050e99469 ¦ ¦ ¦ t ¦ 1 ¦ Wi-Fi + BLE 5 RISC-V 单核 SoC，QFN-32
+demo-0003 ¦ ESP32-S3-WROOM-1-N8R8 ¦ 乐鑫信息科技（上海）股份有限公司 ¦ 无线通信专用模块 ¦ 01929d53-ecc0-7b56-b466-66e20af20ef4 ¦ ¦ ¦ t ¦ 1 ¦ ESP32-S3 模组 8MB Flash 8MB PSRAM
+demo-0004 ¦ ESP32-WROOM-32E-N4 ¦ 乐鑫信息科技（上海）股份有限公司 ¦ 无线通信专用模块 ¦ 01929d53-ecc0-7b56-b466-66e20af20ef4 ¦ ¦ ¦ t ¦ 0 ¦ ESP32 模组 4MB Flash
+demo-0005 ¦ MCP6004T-I/ST ¦ Microchip Technology Inc. ¦ 仪器，运算放大器，缓冲器 ¦ 0191a230-e0f0-74d6-98c4-0629890842be ¦ ¦ ¦ t ¦ 1 ¦ 四通道 1MHz 轨到轨运算放大器 TSSOP-14
+demo-0006 ¦ MCP6004-I/SL ¦ Microchip Technology Inc. ¦ 仪器，运算放大器，缓冲器 ¦ 0191a230-e0f0-74d6-98c4-0629890842be ¦ ¦ ¦ t ¦ 1 ¦ 四通道 1MHz 轨到轨运算放大器 SOIC-14
+demo-0007 ¦ ATSAMD21G18A-AU ¦ Microchip Technology Inc. ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ ¦ ¦ t ¦ 1 ¦ Cortex-M0+ 48MHz 256KB Flash TQFP-48
+demo-0008 ¦ DMP10H400SE-13 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ ¦ t ¦ 1 ¦ P 沟道增强型 MOSFET SOT-223
+demo-0009 ¦ 1N4148W-7-F ¦ Diodes Incorporated ¦ 单二极管 ¦ 0191a234-b180-74d6-98c4-062997906d4f ¦ ¦ ¦ t ¦ 1 ¦ 开关二极管 75V 150mA SOD-123

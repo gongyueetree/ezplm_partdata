@@ -1,0 +1,63 @@
+# 通用封装名（器件"封装"属性 / 描述里出现的叫法）→ KiCad 官方封装名。
+# 用于"通用封装直接映射"这一层：不需要逐器件去找工程文件。
+# pattern 为正则（忽略大小写）；kicad 为 KiCad 封装库:封装名；conf 为置信度。
+# 同一器件可能命中多条，取第一条命中。roots 限定只对这些一级分类生效（避免 "SMA" 连接器被当成二极管封装）。
+rules:
+  - {pattern: "^SOT-?23-?3?$|^SOT23$|\\bSOT-23\\b(?!-[56])", kicad: "Package_TO_SOT_SMD:SOT-23", conf: 0.95}
+  - {pattern: "^SOT-?23-?5$|\\bSOT-23-5\\b|\\bSOT23-5\\b", kicad: "Package_TO_SOT_SMD:SOT-23-5", conf: 0.95}
+  - {pattern: "^SOT-?23-?6$|\\bSOT-23-6\\b|\\bSOT23-6\\b", kicad: "Package_TO_SOT_SMD:SOT-23-6", conf: 0.95}
+  - {pattern: "^SOT-?223(-3)?$|\\bSOT-223\\b", kicad: "Package_TO_SOT_SMD:SOT-223-3_TabPin2", conf: 0.9}
+  - {pattern: "^SOT-?89(-3)?$", kicad: "Package_TO_SOT_SMD:SOT-89-3", conf: 0.9}
+  - {pattern: "^SOT-?363$|^SC-?70-?6$", kicad: "Package_TO_SOT_SMD:SOT-363_SC-70-6", conf: 0.95}
+  - {pattern: "^SOT-?353$|^SC-?70-?5$", kicad: "Package_TO_SOT_SMD:SOT-353_SC-70-5", conf: 0.95}
+  - {pattern: "^SOT-?323$|^SC-?70(-3)?$", kicad: "Package_TO_SOT_SMD:SOT-323_SC-70", conf: 0.95}
+  - {pattern: "^SOD-?123$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_SMD:D_SOD-123", conf: 0.95}
+  - {pattern: "^SOD-?123F(L)?$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_SMD:D_SOD-123F", conf: 0.95}
+  - {pattern: "^SOD-?323$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_SMD:D_SOD-323", conf: 0.95}
+  - {pattern: "^SOD-?523$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_SMD:D_SOD-523", conf: 0.95}
+  - {pattern: "^SOD-?80$|^MiniMELF$|^LL-?34$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_SMD:D_MiniMELF", conf: 0.9}
+  - {pattern: "^DO-?34$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_THT:D_DO-34_SOD68_P7.62mm_Horizontal", conf: 0.75}
+  - {pattern: "^DO-?35$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal", conf: 0.75}
+  - {pattern: "^DO-?41$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal", conf: 0.75}
+  - {pattern: "^DO-?213AB$|^MELF$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_SMD:D_MELF", conf: 0.9}
+  - {pattern: "^SMA$|^DO-?214AC$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_SMD:D_SMA", conf: 0.95}
+  - {pattern: "^SMB$|^DO-?214AA$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_SMD:D_SMB", conf: 0.95}
+  - {pattern: "^SMC$|^DO-?214AB$", roots: ["分立半导体产品","电路保护"], kicad: "Diode_SMD:D_SMC", conf: 0.95}
+  - {pattern: "^TO-?252(-2)?$|^DPAK$|\\bDPAK\\b", kicad: "Package_TO_SOT_SMD:TO-252-2", conf: 0.9}
+  - {pattern: "^TO-?263(-2)?$|^D2PAK$|\\bD2PAK\\b", kicad: "Package_TO_SOT_SMD:TO-263-2", conf: 0.9}
+  - {pattern: "^TO-?220(-3)?$", kicad: "Package_TO_SOT_THT:TO-220-3_Vertical", conf: 0.8}
+  - {pattern: "^TO-?247(-3)?$", kicad: "Package_TO_SOT_THT:TO-247-3_Vertical", conf: 0.8}
+  - {pattern: "^TO-?92(-3)?$", kicad: "Package_TO_SOT_THT:TO-92_Inline", conf: 0.8}
+  - {pattern: "^SOIC-?8$|^SO-?8$|^SOP-?8$|^8-?SOIC$|8引脚SOIC", kicad: "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", conf: 0.9}
+  - {pattern: "^SOIC-?14$|^SO-?14$|^14-?SOIC$", kicad: "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm", conf: 0.9}
+  - {pattern: "^SOIC-?16$|^SO-?16$|^16-?SOIC$", kicad: "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm", conf: 0.85}
+  - {pattern: "^SOIC-?16W$|^SO-?16W$|^SOIC-?16 ?\\(?wide\\)?$", kicad: "Package_SO:SOIC-16W_7.5x10.3mm_P1.27mm", conf: 0.9}
+  - {pattern: "^TSSOP-?8$|^8-?TSSOP$", kicad: "Package_SO:TSSOP-8_3x4.4mm_P0.65mm", conf: 0.9}
+  - {pattern: "^TSSOP-?14$|^14-?TSSOP$", kicad: "Package_SO:TSSOP-14_4.4x5mm_P0.65mm", conf: 0.9}
+  - {pattern: "^TSSOP-?16$|^16-?TSSOP$", kicad: "Package_SO:TSSOP-16_4.4x5mm_P0.65mm", conf: 0.9}
+  - {pattern: "^TSSOP-?20$|^20-?TSSOP$", kicad: "Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm", conf: 0.9}
+  - {pattern: "^TSSOP-?24$|^24-?TSSOP$", kicad: "Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm", conf: 0.9}
+  - {pattern: "^MSOP-?8$|^8-?MSOP$", kicad: "Package_SO:MSOP-8_3x3mm_P0.65mm", conf: 0.9}
+  - {pattern: "^MSOP-?10$|^10-?MSOP$", kicad: "Package_SO:MSOP-10_3x3mm_P0.5mm", conf: 0.9}
+  - {pattern: "^SSOP-?16$", kicad: "Package_SO:SSOP-16_3.9x4.9mm_P0.635mm", conf: 0.8}
+  - {pattern: "^DIP-?8$|^PDIP-?8$", kicad: "Package_DIP:DIP-8_W7.62mm", conf: 0.9}
+  - {pattern: "^DIP-?14$|^PDIP-?14$", kicad: "Package_DIP:DIP-14_W7.62mm", conf: 0.9}
+  - {pattern: "^DIP-?16$|^PDIP-?16$", kicad: "Package_DIP:DIP-16_W7.62mm", conf: 0.9}
+  - {pattern: "^LQFP-?32$", kicad: "Package_QFP:LQFP-32_7x7mm_P0.8mm", conf: 0.8}
+  - {pattern: "^LQFP-?48$", kicad: "Package_QFP:LQFP-48_7x7mm_P0.5mm", conf: 0.8}
+  - {pattern: "^LQFP-?64$", kicad: "Package_QFP:LQFP-64_10x10mm_P0.5mm", conf: 0.8}
+  - {pattern: "^LQFP-?100$", kicad: "Package_QFP:LQFP-100_14x14mm_P0.5mm", conf: 0.8}
+  - {pattern: "^LQFP-?144$", kicad: "Package_QFP:LQFP-144_20x20mm_P0.5mm", conf: 0.8}
+  - {pattern: "^0201$|^0603M$", roots: ["电阻器","电容器","电感器，线圈，扼流圈","电路保护"], kicad: "Resistor_SMD:R_0201_0603Metric", conf: 0.7}
+  - {pattern: "^0402$|^1005M$", roots: ["电阻器","电容器","电感器，线圈，扼流圈","电路保护"], kicad: "Resistor_SMD:R_0402_1005Metric", conf: 0.7}
+  - {pattern: "^0603$|^1608M$", roots: ["电阻器","电容器","电感器，线圈，扼流圈","电路保护"], kicad: "Resistor_SMD:R_0603_1608Metric", conf: 0.7}
+  - {pattern: "^0805$|^2012M$", roots: ["电阻器","电容器","电感器，线圈，扼流圈","电路保护"], kicad: "Resistor_SMD:R_0805_2012Metric", conf: 0.7}
+  - {pattern: "^1206$|^3216M$", roots: ["电阻器","电容器","电感器，线圈，扼流圈","电路保护"], kicad: "Resistor_SMD:R_1206_3216Metric", conf: 0.7}
+  - {pattern: "^1210$|^3225M$", roots: ["电阻器","电容器","电感器，线圈，扼流圈","电路保护"], kicad: "Resistor_SMD:R_1210_3225Metric", conf: 0.7}
+  - {pattern: "^2512$|^6332M$", roots: ["电阻器","电容器","电感器，线圈，扼流圈","电路保护"], kicad: "Resistor_SMD:R_2512_6332Metric", conf: 0.7}
+# 片式尺寸码对电阻/电容/电感要按分类换前缀：R_ / C_ / L_（代码里按分类根替换）
+chip_prefix_by_root:
+  电阻器: "Resistor_SMD:R_"
+  电容器: "Capacitor_SMD:C_"
+  电感器，线圈，扼流圈: "Inductor_SMD:L_"
+  电路保护: "Fuse:Fuse_"

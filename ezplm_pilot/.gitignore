@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+out/
+data/sources/*/
+!data/sources/.gitkeep
+.DS_Store

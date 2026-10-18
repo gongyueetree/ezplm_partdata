@@ -1,0 +1,33 @@
+# 制造商官网产品页 / 数据手册 URL 模板。
+# match: 匹配制造商名的正则（忽略大小写）；product: 产品页模板；datasheet: 数据手册模板（可空）
+# 可用占位：{mpn} 原型号；{mpn_lower}；{mpn_base} 去掉包装后缀；{mpn_gpn} 通用料号（如 ISO7740FDBQ→ISO7740，STM32H503KBU7→STM32H503KB）；{mpn_url} URL 编码\n# product / datasheet 可以是单个模板，也可以是模板列表（按顺序尝试，首个验证通过者写入）
+# gpn: 可选，厂商专属"通用料号"正则（group 1）；未给时默认去掉结尾封装码
+# verify: head | get | none —— 验证方式（有些站对 HEAD 返回 403，需要 GET）
+# 注意：模板只是"候选"，必须验证通过（2xx/3xx 且非搜索页）才写入。
+manufacturers:
+  - {match: "Texas Instruments|德州仪器|^TI$", product: ["https://www.ti.com/product/{mpn_gpn}", "https://www.ti.com/product/{mpn_base}"], datasheet: ["https://www.ti.com/lit/gpn/{mpn_gpn_lower}"], gpn: "^([A-Z]{2,6}\\d{2,6}[A-Z]?)(?:[A-Z]{1,4}\\d?)?(?:-?Q1)?$", verify: get}
+  - {match: "STMicro|意法", product: "", datasheet: ["https://www.st.com/resource/en/datasheet/{mpn_gpn_lower}.pdf", "https://www.st.com/resource/en/datasheet/{mpn_base_lower}.pdf"], gpn: "^(STM32[A-Z]{1,2}\\d{2,3}[A-Z]{2})|^(STM8[A-Z]\\d{3}[A-Z]\\d)|^([A-Z0-9]+?)(?:-?TR)?$", verify: get}
+  - {match: "Microchip|微芯", product: "https://www.microchip.com/en-us/product/{mpn_base}", datasheet: "", verify: get}
+  - {match: "Analog Devices|亚德诺|^ADI$|Maxim|Linear Technology", product: "https://www.analog.com/en/products/{mpn_base_lower}.html", datasheet: "", verify: get}
+  - {match: "NXP|恩智浦", product: "https://www.nxp.com/part/{mpn}", datasheet: "", verify: get}
+  - {match: "Infineon|英飞凌|Cypress", product: "https://www.infineon.com/cms/en/product/{mpn}", datasheet: "", verify: get}
+  - {match: "Renesas|瑞萨", product: "https://www.renesas.com/en/products/{mpn_base_lower}", datasheet: "", verify: get}
+  - {match: "onsemi|ON Semiconductor|安森美", product: "https://www.onsemi.com/products/{mpn_base}", datasheet: "https://www.onsemi.com/pdf/datasheet/{mpn_base_lower}-d.pdf", verify: get}
+  - {match: "Nexperia|安世", product: "https://www.nexperia.com/products/{mpn_base}", datasheet: "https://assets.nexperia.com/documents/data-sheet/{mpn_base}.pdf", verify: get}
+  - {match: "Diodes Inc|美台", product: "https://www.diodes.com/part/view/{mpn_base}", datasheet: "https://www.diodes.com/assets/Datasheets/{mpn_base}.pdf", verify: get}
+  - {match: "Vishay|威世", product: "https://www.vishay.com/en/product/{mpn_base}/", datasheet: "", verify: get}
+  - {match: "ROHM|罗姆", product: "https://www.rohm.com/products/{mpn_base_lower}", datasheet: "", verify: get}
+  - {match: "Toshiba|东芝", product: "https://toshiba.semicon-storage.com/ap-en/semiconductor/product/{mpn_base}.html", datasheet: "", verify: get}
+  - {match: "Espressif|乐鑫", product: "https://www.espressif.com/en/products/socs", datasheet: "", verify: none}
+  - {match: "GigaDevice|兆易", product: "https://www.gigadevice.com/product/{mpn_base_lower}", datasheet: "", verify: get}
+  - {match: "Torex|特瑞仕", product: "https://product.torexsemi.com/en/series/{mpn_series}", datasheet: "", verify: get}
+  - {match: "Micron|美光", product: "https://www.micron.com/products/dram", datasheet: "", verify: none}
+  - {match: "ISSI|Integrated Silicon", product: "https://www.issi.com/WW/pdf/{mpn_base}.pdf", datasheet: "https://www.issi.com/WW/pdf/{mpn_base}.pdf", verify: get}
+  - {match: "Mini-Circuits", product: "https://www.minicircuits.com/WebStore/dashboard.html?model={mpn_url}", datasheet: "https://www.minicircuits.com/pdfs/{mpn}.pdf", verify: get}
+  - {match: "Bourns", product: "https://www.bourns.com/products/search?q={mpn_url}", datasheet: "", verify: none}
+  - {match: "Broadcom|博通", product: "https://www.broadcom.com/products/{mpn_base_lower}", datasheet: "", verify: get}
+# 分销商兜底（数据手册 / 产品页都能拿到，且他们的分类可反向校验物料分类）
+distributors:
+  - {name: "LCSC/立创", search: "https://www.lcsc.com/search?q={mpn_url}", note: "有 API（需申请）；页面含 datasheet 直链与分类"}
+  - {name: "DigiKey", search: "https://www.digikey.cn/zh/products/result?keywords={mpn_url}", note: "Product Information API v4 返回 datasheet/产品页/分类"}
+  - {name: "Mouser", search: "https://www.mouser.cn/c/?q={mpn_url}", note: "Search API 返回 DataSheetUrl/ProductDetailUrl/Category"}

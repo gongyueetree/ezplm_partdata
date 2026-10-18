@@ -1,0 +1,150 @@
+01a13d7a-6ae7-726e-92a1-f6b2fc51b90f ¦ MD56V62160M ¦ 罗姆半导体（上海）有限公司 ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ MD56V62160M 动态随机存取存储器器件。
+01a13d7a-667b-765a-8232-2c4b39404771 ¦ K4E8E324ED-EGCG ¦ 三星半导体 ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ K4E8E324ED-EGCG 动态随机存取存储器器件。
+01a13d7a-61ac-739e-9d44-ecad0bed3afb ¦ IS41C16257C ¦ Integrated Silicon Solution Inc. ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ IS41C16257C 动态随机存取存储器器件。
+01a13d7a-5b56-7229-b04b-5f1fea580d1a ¦ EVS32M16T-5B ¦ Teledyne e2v ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ EVS32M16T-5B 动态随机存取存储器器件。
+01a13d7a-538f-75d2-b5a9-ed7dd40d8035 ¦ UPD48576218F1-E18-DW1-A ¦ Renesas Electronics Corporation ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ UPD48576218F1-E18-DW1-A 随机存取存储器集成电路。
+01a13d7a-4f54-7418-a489-afbc6287f07c ¦ ZBQ8GA16B-BID ¦ 恒烁半导体 ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ ZBQ8GA16B-BID 动态随机存取存储器器件。
+01a13d7a-4ad9-7269-82a2-6683fe192bef ¦ CXDB6CCBM-MA-A ¦ CXMT ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ CXDB6CCBM-MA-A 动态随机存取存储器器件。
+01a13d7a-469c-7692-a8d0-458b85d74309 ¦ BWMYAX32P8A-64G ¦ 佰维存储 ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ BWMYAX32P8A-64G 动态随机存取存储器器件。
+01a13d7a-4228-71b8-a7b3-d5bfdc43c5f8 ¦ M88MR5DB01 ¦ 澜起科技 ¦ 缓冲器，驱动器，接收器，收发器 ¦ 01913406-0358-779a-bd92-977a5afab832 ¦ ¦ ¦ f ¦ 0 ¦ M88MR5DB01 DDR5 多路复用数据缓冲器集成电路。
+01a13d7a-3de8-7289-8dd3-4748f9bb2c7a ¦ FM38F16SBB-8KGD ¦ 东芯半导体股份有限公司 ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ FM38F16SBB-8KGD 动态随机存取存储器器件。
+01a13d7a-396c-722f-8efe-90e46b8b5e0d ¦ XT61M4G8D2TA-B8BIT ¦ 芯天下 ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ XT61M4G8D2TA-B8BIT NAND Flash 与 LPDDR2 SDRAM 多芯片封装存储器。
+01a13d7a-3528-708e-8050-6ce24c7470f2 ¦ SCB13H2G160GF ¦ 西安紫光国芯半导体股份有限公司 ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ SCB13H2G160GF 动态随机存取存储器器件。
+01a13d7a-30aa-77bc-9c2f-ee17957a8509 ¦ GDB5CCQN-MK ¦ 北京兆易创新科技股份有限公司 ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ GDB5CCQN-MK 动态随机存取存储器器件。
+01a13d7a-2c78-7768-a32c-804a4d844900 ¦ IS66WVO16M8DBLL ¦ Integrated Silicon Solution Inc. ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ IS66WVO16M8DBLL OctalRAM 存储器器件。
+01a13d7a-27c5-775c-9e9f-61e027c90317 ¦ RMHE41A184AGBG-120 ¦ Renesas Electronics Corporation ¦ 存储器 ¦ 01912c5f-6130-779a-bd92-977a314192b1 ¦ ¦ ¦ f ¦ 0 ¦ RMHE41A184AGBG-120 随机存取存储器集成电路。
+01933e59-92f0-7e1d-8407-7dab30ffacac ¦ STM32H503KBU7 ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ STM32H503KBUx ¦ QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm ¦ t ¦ 1 ¦ 高性能，Arm Cortex-M33，MCU带有128 KB Flash，25 KB RAM，250 MHz CPU
+01933e59-92f0-7e1d-8407-7dab30ff9ea8 ¦ STM32H503KBU7TR ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ STM32H503KBUx ¦ QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm ¦ t ¦ 1 ¦ 高性能，Arm Cortex-M33，MCU带有128 KB Flash，25 KB RAM，250 MHz CPU
+01933e59-92f0-7e1d-8407-7dab30ff8df0 ¦ STM32H562ZGT6TR ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ STM32H562ZGTx ¦ TQFP-144_20x20mm_P0.5mm ¦ t ¦ 1 ¦ 高性能Arm Cortex-M33（带TrustZone）微控制器，配备1兆字节闪存、640千字节RAM，CPU主频250 MHz
+01933e59-92f0-7e1d-8407-7dab30ff7e8c ¦ STM32H563VIT6TR ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ STM32H563VITx ¦ QFP-100_14x14mm_P0.5mm ¦ t ¦ 1 ¦ 高性能，Arm Cortex-M33带有TrustZone，MCU带有2 MB Flash，640 KB RAM，250 MHz CPU
+01933e59-92f0-7e1d-8407-7dab30ff6ee3 ¦ STM32H563VGT6TR ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ STM32H563VGTx ¦ QFP-100_14x14mm_P0.5mm ¦ t ¦ 1 ¦ 高性能，Arm Cortex-M33带有TrustZone，MCU带有2 MB Flash，640 KB RAM，250 MHz CPU
+01933e59-92f0-7e1d-8407-7dab30ff5ec5 ¦ STM32H563ZGT6TR ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ STM32H563ZGTx ¦ TQFP-144_20x20mm_P0.5mm ¦ t ¦ 1 ¦ 高性能，Arm Cortex-M33带有TrustZone，MCU带有2 MB Flash，640 KB RAM，250 MHz CPU
+01933e59-92f0-7e1d-8407-7dab30ff4c66 ¦ STM32H573ZIT6TR ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ STM32H573ZITx ¦ TQFP-144_20x20mm_P0.5mm ¦ t ¦ 1 ¦ 高性能，Arm Cortex-M33带有TrustZone，MCU带有2 MB Flash，640 KB RAM，250 MHz CPU
+01933e59-92f0-7e1d-8407-7dab30ff3e57 ¦ STM32H563ZIT3QTR ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ STM32H563ZITx ¦ TQFP-144_20x20mm_P0.5mm ¦ t ¦ 1 ¦ 高性能，Arm Cortex-M33带有TrustZone，MCU带有2 MB Flash，640 KB RAM，250 MHz CPU
+01933e59-92f0-7e1d-8407-7dab30ff2e99 ¦ STM32H7S3V8H6 ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ ¦ BGA-100_8x8mm_Layout10x10_P0.8mm ¦ t ¦ 1 ¦ 高性能Arm Cortex-M7微控制器，600MHz主频，64KB启动闪存，620KB SRAM，集成DSP、缓存及USB高速物理层接口
+01933e59-92f0-7e1d-8407-7dab30ff1d02 ¦ STM32H7S3V8Y6TR ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ ¦ ¦ t ¦ 0 ¦ 高性能Arm Cortex-M7微控制器，600MHz主频，64KB启动闪存，620KB SRAM，集成DSP、缓存及USB高速物理层
+01933e59-92f0-7e1d-8407-7dab30ff0f58 ¦ STM32H7S3V8T6 ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ ¦ QFP-100_14x14mm_P0.5mm ¦ t ¦ 1 ¦ 高性能Arm Cortex-M7微控制器，600MHz主频，64KB启动闪存，620KB SRAM，集成DSP、缓存及USB高速物理层
+01933e59-92f0-7e1d-8407-7dab30fefd18 ¦ STM32H7R3R8V6 ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ ¦ QFN-68-1EP_8x8mm_P0.4mm_EP6.4x6.4mm ¦ t ¦ 1 ¦ 高性能Arm Cortex-M7微控制器，600MHz主频，64KB启动闪存，620KB SRAM，集成DSP、缓存和USB OTG FS功能
+01933e59-92f0-7e1d-8407-7dab30feeffc ¦ STM32H7S3Z8T6 ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ ¦ TQFP-144_20x20mm_P0.5mm ¦ t ¦ 1 ¦ 高性能Arm Cortex-M7微控制器，600MHz主频，64KB启动闪存，620KB SRAM，集成DSP、缓存及USB高速物理层接口
+01933e59-92f0-7e1d-8407-7dab30fedda9 ¦ STM32H7S3Z8J6 ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ ¦ BGA-144_10x10mm_Layout12x12_P0.8mm ¦ t ¦ 1 ¦ 高性能Arm Cortex-M7微控制器，600MHz主频，64KB启动闪存，620KB SRAM，集成DSP、缓存及USB高速物理层
+01933e59-92f0-7e1d-8407-7dab30fecd57 ¦ STM32H7S3I8T6 ¦ STMicroelectronics ¦ 微控制器（MCU） ¦ 01922470-1c20-77d0-8467-a1dec17f227f ¦ ¦ QFP-176_24x24mm_P0.5mm ¦ t ¦ 1 ¦ 高性能Arm Cortex-M7微控制器，600MHz主频，64KB启动闪存，620KB SRAM，集成DSP、缓存及USB高速物理层接口
+0191a239-2df0-74d6-98c4-0629aa4b54a9 ¦ RLZTE-1122D ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ SOD-80 ¦ t ¦ 1 ¦ 齐纳二极管 21.2V 500毫瓦 LLDS
+0191a239-2df0-74d6-98c4-0629aa4b488e ¦ RLZTE-1127A ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ SOD-80 ¦ t ¦ 1 ¦ 齐纳二极管 25.6V 500毫瓦 LLDS
+0191a239-2df0-74d6-98c4-0629aa4b3c3d ¦ RLZTE-1122C ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ SOD-80 ¦ t ¦ 1 ¦ 齐纳二极管 21.2V 500毫瓦 LLDS
+0191a239-2df0-74d6-98c4-0629aa4b3092 ¦ RLZTE-1122A ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ SOD-80 ¦ t ¦ 1 ¦ 齐纳二极管 21.2V 500毫瓦 LLDS
+0191a239-2df0-74d6-98c4-0629aa4b2712 ¦ RLZTE-1120D ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ SOD-80 ¦ t ¦ 1 ¦ 齐纳二极管 19.1V 500毫瓦 LLDS
+0191a239-2df0-74d6-98c4-0629aa4b18d1 ¦ RLZTE-1120C ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ SOD-80 ¦ t ¦ 1 ¦ 齐纳二极管 19.1V 500毫瓦 LLDS
+0191a239-2df0-74d6-98c4-0629aa4b0cf4 ¦ RLZTE-1120A ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ SOD-80 ¦ t ¦ 1 ¦ 齐纳二极管 19.1V 500毫瓦 LLDS
+0191a239-2df0-74d6-98c4-0629aa4b0187 ¦ RLZTE-1118C ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ SOD-80 ¦ t ¦ 1 ¦ 齐纳二极管 17.3V 500毫瓦 LLDS
+0191a239-2df0-74d6-98c4-0629aa4af736 ¦ RLZTE-1122B ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ SOD-80 ¦ t ¦ 1 ¦ 齐纳二极管 21.2V 500MW LLDS
+0191a239-2df0-74d6-98c4-0629aa4aeaa5 ¦ RLZTE-1127B ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ SOD-80 ¦ t ¦ 1 ¦ 齐纳二极管 25.6V 500毫瓦 LLDS
+0191a239-2df0-74d6-98c4-0629aa4adeaa ¦ MTZJT-725.1B ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ DO-34 ¦ t ¦ 1 ¦ 齐纳二极管 5.1V 500毫瓦 MSD
+0191a239-2df0-74d6-98c4-0629aa4ad3a3 ¦ MTZJT-7216B ¦ 罗姆半导体（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ¦ DO-34 ¦ t ¦ 1 ¦ 齐纳二极管 16V 500毫瓦 MSD
+0191a239-2df0-74d6-98c4-0629aa4ac56d ¦ CRY82(TE85L,Q,M) ¦ 东芝电子元件（上海）有限公司 ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ D_Zener ¦ SOD-123F ¦ t ¦ 1 ¦ RoHS
+0191a239-2df0-74d6-98c4-0629aa4aba69 ¦ ZGL41-200-E3/96 ¦ Vishay Intertechnology, Inc. ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ZPYxx ¦ DO-213AB ¦ f ¦ 1 ¦ 齐纳二极管 200V 1W GL41
+0191a239-2df0-74d6-98c4-0629aa4aaeb6 ¦ ZGL41-180-E3/96 ¦ Vishay Intertechnology, Inc. ¦ 单齐纳二极管 ¦ 0191a236-e400-74d6-98c4-0629a0c4c984 ¦ ZPYxx ¦ DO-213AB ¦ f ¦ 1 ¦ 齐纳二极管 180V 1W GL41
+0191a234-7ad0-74d6-98c4-062996a66ac8 ¦ AUIRFR5505 ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET P沟道 55V 18A DPAK封装
+0191a234-76e8-74d6-98c4-062996a65ff6 ¦ AUIRFR5410 ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET P沟道 100V 13A DPAK封装
+0191a234-76e8-74d6-98c4-062996a65103 ¦ AUIRFR5305 ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ -55V，P沟道，最大65毫欧，车规级MOSFET，DPAK封装，第五代
+0191a234-76e8-74d6-98c4-062996a644df ¦ AUIRFR48Z ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 55V 42A DPAK封装
+0191a234-76e8-74d6-98c4-062996a6398a ¦ AUIRFR4105Z ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 55V 20A DPAK封装
+0191a234-76e8-74d6-98c4-062996a62ee2 ¦ AUIRFR4105TRL ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 55V 20A DPAK封装
+0191a234-76e8-74d6-98c4-062996a62359 ¦ AUIRFR4105 ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 55V 20A DPAK
+0191a234-76e8-74d6-98c4-062996a617c0 ¦ AUIRFR4104 ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 40V 42A DPAK封装
+0191a234-76e8-74d6-98c4-062996a60887 ¦ AUIRFR3710Z ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 100V 42A DPAK封装
+0191a234-76e8-74d6-98c4-062996a5ff46 ¦ AUIRFR3504Z ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 40V 42A DPAK封装
+0191a234-76e8-74d6-98c4-062996a5f0dd ¦ AUIRFR2905ZTR ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 55V 42A DPAK封装
+0191a234-76e8-74d6-98c4-062996a5e6be ¦ AUIRFR2905Z ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 55V 42A DPAK封装
+0191a234-76e8-74d6-98c4-062996a5da09 ¦ AUIRFR2607ZTRL ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 75V 42A DPAK封装
+0191a234-76e8-74d6-98c4-062996a5cf76 ¦ AUIRFR2607Z ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 75V 42A DPAK封装
+0191a234-76e8-74d6-98c4-062996a5c2da ¦ AUIRFR2307Z ¦ Infineon Technologies AG ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ MOSFET N沟道 75V 42A DPAK封装
+0191a0f6-6908-7156-8c88-b0a331c2833a ¦ 62M15-L0-040CH ¦ Grayhill ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 24PPR
+0191a0f6-6908-7156-8c88-b0a331c27651 ¦ 62M15-L0-040SH ¦ Grayhill ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 24PPR
+0191a0f6-6908-7156-8c88-b0a331c2693c ¦ 62M15-M0-020CH ¦ Grayhill ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 24PPR
+0191a0f6-6908-7156-8c88-b0a331c25e81 ¦ 62M15-L0-020SH ¦ Grayhill ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 24PPR
+0191a0f6-6908-7156-8c88-b0a331c250ae ¦ 62M15-H0-PH ¦ Grayhill ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 24PPR
+0191a0f6-6908-7156-8c88-b0a331c245bc ¦ 62M15-H0-040CH ¦ Grayhill ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 24PPR
+0191a0f6-6908-7156-8c88-b0a331c23b14 ¦ 62M15-L0-PH ¦ Grayhill ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 24PPR
+0191a0f6-6908-7156-8c88-b0a331c22f5f ¦ AEDC-5570-B12 ¦ Broadcom Inc ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 编码器 3通道 1000线每转 轴径6毫米
+0191a0f6-6908-7156-8c88-b0a331c22383 ¦ AEDC-5570-Z12 ¦ Broadcom Inc ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 5000PPR
+0191a0f6-6908-7156-8c88-b0a331c2178e ¦ AEDC-5570-W12 ¦ Broadcom Inc ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 2500PPR
+0191a0f6-6908-7156-8c88-b0a331c20a19 ¦ AEDC-5560-Z12 ¦ Broadcom Inc ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 5000PPR
+0191a0f6-6908-7156-8c88-b0a331c1ffcd ¦ AEDC-5550-Z12 ¦ Broadcom Inc ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 5000PPR
+0191a0f6-6908-7156-8c88-b0a331c1f315 ¦ ENT1J-D28-L00256L ¦ Bourns Inc. ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ t ¦ 0 ¦ 旋转编码器 光学式 256PPR
+0191a0f6-6908-7156-8c88-b0a331c1e4e5 ¦ AS35-M23S-B14S ¦ Broadcom Inc ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ f ¦ 0 ¦ 35毫米模块 23位 ST B型 5毫米 SSI
+0191a0f6-6908-7156-8c88-b0a331c1d980 ¦ AS35-M23S-B14K ¦ Broadcom Inc ¦ 编码器 ¦ 0191a0f6-41f8-7156-8c88-b0a33139fca4 ¦ ¦ ¦ f ¦ 0 ¦ 35毫米 模块 23位 ST B型 5毫米 485
+0191a0e4-b9b0-7156-8c88-b0a2e29f39f0 ¦ BP0CA0770A700 ¦ Kyocera AVX ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 带通射频滤波器 770MHz 23ULGA
+0191a0e4-b5c8-7156-8c88-b0a2e29f2c8d ¦ VLF-1800+ ¦ Mini-Circuits ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 射频低通滤波器 2.125GHz SMA
+0191a0e4-b5c8-7156-8c88-b0a2e29f219c ¦ VLF-7200+ ¦ Mini-Circuits ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 射频滤波器 低通 8.15GHz SMA
+0191a0e4-b5c8-7156-8c88-b0a2e29f15e8 ¦ VLF-5500+ ¦ Mini-Circuits ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 射频滤波器 低通 6.2GHz SMA
+0191a0e4-b5c8-7156-8c88-b0a2e29f09e8 ¦ HF0AA3460A700 ¦ Kyocera AVX ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 射频滤波器 高通 3.46GHz 16引脚ULGA封装
+0191a0e4-b5c8-7156-8c88-b0a2e29ef423 ¦ ZVBP-2450-S+ ¦ Mini-Circuits ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 射频滤波器 带通 2.45GHz 模块
+0191a0e4-b5c8-7156-8c88-b0a2e29eeaf2 ¦ ZVBP-2072R5-S+ ¦ Mini-Circuits ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 射频滤波器 带通 2.0725GHz 模块
+0191a0e4-b5c8-7156-8c88-b0a2e29edd49 ¦ ZVBP-2450A-S+ ¦ Mini-Circuits ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 射频滤波器 带通 2.45GHz 模块
+0191a0e4-b5c8-7156-8c88-b0a2e29ec9c7 ¦ ZX75BP-915-S+ ¦ Mini-Circuits ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ RF滤波器 带通 915MHz 模块
+0191a0e4-b5c8-7156-8c88-b0a2e29e0c60 ¦ BP0IA0175A700 ¦ Kyocera AVX ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 带通射频滤波器 175MHz 45SMD
+0191a0e4-b5c8-7156-8c88-b0a2e29e0116 ¦ BP0IA0115A700 ¦ Kyocera AVX ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 带通射频滤波器 115MHz 45SMD
+0191a0e4-b5c8-7156-8c88-b0a2e29df591 ¦ BP0EA0290A700 ¦ Kyocera AVX ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 带通射频滤波器 290MHz 30贴片封装
+0191a0e4-b5c8-7156-8c88-b0a2e29de90e ¦ BP0EA2135A700 ¦ Kyocera AVX ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 射频滤波器 带通 2.135GHz 30SMD
+0191a0e4-b5c8-7156-8c88-b0a2e29dddb9 ¦ BP0EA0420A700 ¦ Kyocera AVX ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 带通射频滤波器 420MHz 30SMD
+0191a0e4-b5c8-7156-8c88-b0a2e29dd17c ¦ BP0DA0595A700 ¦ Kyocera AVX ¦ RF 滤波器 ¦ 0191a0e4-a628-7156-8c88-b0a2e2563407 ¦ ¦ ¦ t ¦ 0 ¦ 带通射频滤波器 595MHz 25SMD
+01919c05-4608-74fa-b8c1-41ea22f33703 ¦ CY25811SXC ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ SOIC-8_3.9x4.9mm_P1.27mm ¦ t ¦ 1 ¦ 集成电路 时钟/频率合成器 8引脚SOIC封装
+01919c05-4608-74fa-b8c1-41ea22f32aad ¦ CY25200FZXC ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ TSSOP-16_4.4x5mm_P0.65mm ¦ t ¦ 1 ¦ IC 扇出缓冲器 16TSSOP
+01919c05-4608-74fa-b8c1-41ea22f31fd6 ¦ CY2510ZXC-1T ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ TSSOP-24_4.4x7.8mm_P0.65mm ¦ t ¦ 1 ¦ IC扇出缓冲器 24TSSOP
+01919c05-4608-74fa-b8c1-41ea22f31349 ¦ CY2510ZXC-1 ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ TSSOP-24_4.4x7.8mm_P0.65mm ¦ t ¦ 1 ¦ IC扇出缓冲器 24TSSOP
+01919c05-4608-74fa-b8c1-41ea22f307cf ¦ CY25100ZXIFT ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ TSSOP-8_3x4.4mm_P0.65mm ¦ t ¦ 1 ¦ IC扇出缓冲器 8TSSOP
+01919c05-4608-74fa-b8c1-41ea22f2f9a3 ¦ CY2509ZXC-1T ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ TSSOP-24_4.4x7.8mm_P0.65mm ¦ t ¦ 1 ¦ IC扇出缓冲器 24TSSOP
+01919c05-4608-74fa-b8c1-41ea22f2ed75 ¦ CY2509ZXC-1 ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ TSSOP-24_4.4x7.8mm_P0.65mm ¦ t ¦ 1 ¦ IC扇出缓冲器 24TSSOP
+01919c05-4608-74fa-b8c1-41ea22f2e392 ¦ CY24212SXC-5 ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ SOIC-8_3.9x4.9mm_P1.27mm ¦ t ¦ 1 ¦ IC 时钟发生器 8SOIC
+01919c05-4608-74fa-b8c1-41ea22f2d743 ¦ CY24206ZXC-4 ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ TSSOP-16_4.4x5mm_P0.65mm ¦ t ¦ 1 ¦ IC时钟发生器 16TSSOP
+01919c05-4608-74fa-b8c1-41ea22f2ca2c ¦ CY24204ZXC-3T ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ TSSOP-16_4.4x5mm_P0.65mm ¦ t ¦ 1 ¦ IC 时钟发生器 16TSSOP
+01919c05-4608-74fa-b8c1-41ea22f2bd43 ¦ CY24204ZXC-3 ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ TSSOP-16_4.4x5mm_P0.65mm ¦ t ¦ 1 ¦ IC时钟发生器 16TSSOP
+01919c05-4608-74fa-b8c1-41ea22f2a9b3 ¦ CY2412SXC-3 ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ SOIC-8_3.9x4.9mm_P1.27mm ¦ t ¦ 1 ¦ IC 时钟发生器 8SOIC
+01919c05-4608-74fa-b8c1-41ea22f29571 ¦ CY23S08ZXC-1H ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ TSSOP-16_4.4x5mm_P0.65mm ¦ t ¦ 1 ¦ IC扇出缓冲器 16TSSOP
+01919c05-4608-74fa-b8c1-41ea22f28bae ¦ CY23S08SXC-1T ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ SOIC-16_3.9x9.9mm_P1.27mm ¦ t ¦ 1 ¦ IC 扇出缓冲器 16SOIC
+01919c05-4608-74fa-b8c1-41ea22f27fd8 ¦ CY23S08SXC-1 ¦ Infineon Technologies AG ¦ 时钟发生器，PLL，频率合成器 ¦ 01912ef5-ee78-779a-bd92-977a3dc9396c ¦ ¦ SOIC-16_3.9x9.9mm_P1.27mm ¦ t ¦ 1 ¦ IC扇出缓冲器 16SOIC
+018f9934-c338-7eb0-a75d-2431da3962e8 ¦ DMP10H4D2S-7 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ SOT-23-3 ¦ t ¦ 1 ¦ P 沟道增强型 MOSFET
+018f9934-c338-7eb0-a75d-2431da3952e6 ¦ DMP10H4D2S-13 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ SOT-23-3 ¦ t ¦ 1 ¦ P 沟道增强型 MOSFET
+018f9934-bf50-7eb0-a75d-2431da393bf6 ¦ DMP10H400SK3-13 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ TO-252-2 ¦ t ¦ 1 ¦ P 沟道增强型 MOSFET
+018f9934-bb68-7eb0-a75d-2431da39212e ¦ DMP10H400SEQ-13 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ SOT-223-3 ¦ t ¦ 1 ¦ 100V P沟道增强型MOSFET
+018f9934-bb68-7eb0-a75d-2431da3908d9 ¦ DMP10H400SE-13 ¦ Diodes Incorporated ¦ ¦ ¦ ¦ SOT-223-3 ¦ t ¦ 1 ¦ P 沟道增强型 MOSFET
+018f9934-b780-7eb0-a75d-2431da38f359 ¦ DMP10H088SPS-13 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ Power-DFN-8_5x6mm_P1.27mm_EP3.48x3.9mm(TI: VSONP, Diodes: PowerDI, Vishay: PowerPak) ¦ t ¦ 0 ¦ 100V P 沟道增强型 MOSFET
+018f9934-b780-7eb0-a75d-2431da38d403 ¦ DMP1070UQ-7 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ SOT-23-3 ¦ t ¦ 1 ¦ P 沟道增强型 MOSFET
+018f9934-b398-7eb0-a75d-2431da38c787 ¦ DMP1070UQ-13 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ SOT-23-3 ¦ t ¦ 1 ¦ P 沟道增强型 MOSFET
+018f9934-b398-7eb0-a75d-2431da38ad35 ¦ DMP1070UCA3-7A ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ LGA-3_0.6x0.7mm_P0.35mm ¦ t ¦ 1 ¦ P 沟道增强型 MOSFET
+018f9934-afb0-7eb0-a75d-2431da389007 ¦ DMP1070U-7 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ SOT-23-3 ¦ t ¦ 1 ¦ P 沟道增强型 MOSFET
+018f9934-afb0-7eb0-a75d-2431da388111 ¦ DMP1070U-13 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ SOT-23-3 ¦ t ¦ 1 ¦ P 沟道增强型 MOSFET
+018f9934-abc8-7eb0-a75d-2431da385ec6 ¦ DMP1055UFDB-7 ¦ Diodes Incorporated ¦ FET、MOSFET 阵列 ¦ 0191a0e1-fe78-7156-8c88-b0a2d6d1c8c0 ¦ ¦ DFN-6-2EP_2x2mm_P0.65mm_2EP0.6x1mm ¦ t ¦ 1 ¦ 双 P 沟道增强模式 MOSFET
+018f9934-abc8-7eb0-a75d-2431da384e0e ¦ DMP1055UFDB-13 ¦ Diodes Incorporated ¦ ¦ ¦ ¦ DFN-6-2EP_2x2mm_P0.65mm_2EP0.6x1mm ¦ t ¦ 1 ¦ 双 P 沟道增强模式 MOSFET
+018f9934-a7e0-7eb0-a75d-2431da382413 ¦ DMP1045UQ-7 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ SOT-23-3 ¦ t ¦ 1 ¦ P沟道增强型MOSFET
+018f9934-a3f8-7eb0-a75d-2431da380ffb ¦ DMP1045UFY4-7 ¦ Diodes Incorporated ¦ 单 FET，MOSFET ¦ 0191a232-ffe8-74d6-98c4-062990effbb6 ¦ ¦ DFN-3-1EP_1.5x2mm_P0.5mm_EP0.8x1.1mm ¦ t ¦ 1 ¦ P 沟道增强型 MOSFET
+018cd92d-e5a8-75e5-8b52-8f4a3c5278cb ¦ XC9276B284ER-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ DFN-8-1EP_2x2mm_P0.5mm_EP1.04x1.8mm ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-e1c0-75e5-8b52-8f4a3c526a33 ¦ XC9276B278MR-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ SOT-23-6 ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-e1c0-75e5-8b52-8f4a3c525bb1 ¦ XC9276B2780R-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ BGA-6_1.1x1.7mm_Layout2x3_P0.6mm ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-e1c0-75e5-8b52-8f4a3c524bdd ¦ XC9276B268ER-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ DFN-8-1EP_2x2mm_P0.5mm_EP1.04x1.8mm ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-e1c0-75e5-8b52-8f4a3c523882 ¦ XC9276B262MR-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ SOT-23-6 ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-ddd8-75e5-8b52-8f4a3c522858 ¦ XC9276B2620R-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ BGA-6_1.1x1.7mm_Layout2x3_P0.6mm ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-ddd8-75e5-8b52-8f4a3c52196a ¦ XC9276B258ER-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ DFN-8-1EP_2x2mm_P0.5mm_EP1.04x1.8mm ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-ddd8-75e5-8b52-8f4a3c520a2b ¦ XC9276B255MR-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ SOT-23-6 ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-d9f0-75e5-8b52-8f4a3c51fa88 ¦ XC9276B2550R-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ BGA-6_1.1x1.7mm_Layout2x3_P0.6mm ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-d9f0-75e5-8b52-8f4a3c51e836 ¦ XC9276B254ER-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ DFN-8-1EP_2x2mm_P0.5mm_EP1.04x1.8mm ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-d9f0-75e5-8b52-8f4a3c51d8cf ¦ XC9276B248MR-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ SOT-23-6 ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-d9f0-75e5-8b52-8f4a3c51c9b9 ¦ XC9276B2480R-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ BGA-6_1.1x1.7mm_Layout2x3_P0.6mm ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-d608-75e5-8b52-8f4a3c51b9e5 ¦ XC9276B244ER-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ DFN-8-1EP_2x2mm_P0.5mm_EP1.04x1.8mm ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-d608-75e5-8b52-8f4a3c51ab28 ¦ XC9276B242MR-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ SOT-23-6 ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018cd92d-d608-75e5-8b52-8f4a3c51984d ¦ XC9276B2420R-G ¦ 特瑞仕半导体株式会社 ¦ 稳压器 - DC-DC 开关稳压器 ¦ 019132e1-97f8-779a-bd92-977a54e2cb2d ¦ ¦ BGA-6_1.1x1.7mm_Layout2x3_P0.6mm ¦ t ¦ 1 ¦ DC/DC转换器__200nA超低电流消耗
+018a1b30-f178-7713-bcd6-fe350c3de7ac ¦ ISO7740FDBQ ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SSOP-16_3.9x4.9mm_P0.635mm ¦ t ¦ 1 ¦ EMC 性能优异的四通道、4/0、增强型数字隔离器
+018a1b30-f178-7713-bcd6-fe350c3dd6c6 ¦ ISO7821FDWR ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SOIC-16_7.5x10.3mm_P1.27mm ¦ t ¦ 1 ¦ 高隔离额定值、双通道、1/1、增强型数字隔离器
+018a1b30-f178-7713-bcd6-fe350c3dc4e0 ¦ ISO7821DW ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SOIC-16_7.5x10.3mm_P1.27mm ¦ t ¦ 1 ¦ 高隔离额定值、双通道、1/1、增强型数字隔离器
+018a1b30-f178-7713-bcd6-fe350c3db577 ¦ ISO7710DW ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SOIC-16_7.5x10.3mm_P1.27mm ¦ t ¦ 1 ¦ EMC 性能优异的单通道、增强型数字隔离器
+018a1b30-f178-7713-bcd6-fe350c3da597 ¦ ISO7310FCQDQ1 ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SOIC-8_3.9x4.9mm_P1.27mm ¦ t ¦ 1 ¦ 汽车类低功耗、单通道、25Mbps 数字隔离器
+018a1b30-f178-7713-bcd6-fe350c3d94b3 ¦ ISO722DR ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SOIC-8_3.9x4.9mm_P1.27mm ¦ t ¦ 1 ¦ 具有使能功能的单通道 100Mbps 数字隔离器
+018a1b30-f178-7713-bcd6-fe350c3d845d ¦ ISO7331CQDWRQ1 ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ISO7331C ¦ SOIC-16_7.5x10.3mm_P1.27mm ¦ t ¦ 1 ¦ 汽车类低功耗、三通道、2/1、25Mbps 数字隔离器
+018a1b30-f178-7713-bcd6-fe350c3d75ec ¦ ISO7720QDWQ1 ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SOIC-16_7.5x10.3mm_P1.27mm ¦ t ¦ 1 ¦ EMC 性能优异的汽车类双通道、2/0、增强型数字隔离器
+018a1b30-ed90-7713-bcd6-fe350c3d67df ¦ ISO7740QDWQ1 ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SOIC-16_7.5x10.3mm_P1.27mm ¦ t ¦ 1 ¦ EMC 性能优异的汽车类四通道、4/0、增强型数字隔离器
+018a1b30-ed90-7713-bcd6-fe350c3d579c ¦ ISO7342CDW ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ISO7342C ¦ SOIC-16_7.5x10.3mm_P1.27mm ¦ t ¦ 1 ¦ 低功耗、四通道、2/2、25Mbps 数字隔离器
+018a1b30-ed90-7713-bcd6-fe350c3d453d ¦ ISOW7844FDWE ¦ Texas Instruments Incorporated ¦ 电源管理 - 专用 ¦ 0191317d-9358-779a-bd92-977a4ce9b75f ¦ ¦ SOIC-16_7.5x10.3mm_P1.27mm ¦ t ¦ 1 ¦ 具有集成电源的四通道、0/4、增强型数字隔离器
+018a1b30-ed90-7713-bcd6-fe350c3d3523 ¦ ISO7421D ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SOIC-8_3.9x4.9mm_P1.27mm ¦ t ¦ 1 ¦ 双通道、1/1、1Mbps 数字隔离器
+018a1b30-ed90-7713-bcd6-fe350c3d249a ¦ ISO7763QDWQ1 ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SOIC-16_7.5x10.3mm_P1.27mm ¦ t ¦ 1 ¦ EMC 性能优异的汽车类 6 通道、3/3、增强型数字隔离器
+018a1b30-ed90-7713-bcd6-fe350c3d142a ¦ ISO7730DBQ ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SSOP-16_3.9x4.9mm_P0.635mm ¦ t ¦ 1 ¦ EMC 性能优异的三通道、3/0、增强型数字隔离器
+018a1b30-ed90-7713-bcd6-fe350c3d0562 ¦ ISO722QDRQ1 ¦ Texas Instruments Incorporated ¦ 数字隔离器 ¦ 0191a0ee-0880-7156-8c88-b0a30bde1389 ¦ ¦ SOIC-8_3.9x4.9mm_P1.27mm ¦ t ¦ 1 ¦ 具有使能功能的汽车类单通道 100Mbps 数字隔离器
