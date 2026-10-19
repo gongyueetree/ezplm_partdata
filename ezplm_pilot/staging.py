@@ -101,7 +101,7 @@ class CategoryParam(Base):
     unit = Column(String(30))
     vmin = Column(String(40))
     vmax = Column(String(40))
-    values = Column(String(500))        # enum 的常见取值，逗号分隔
+    values = Column("vals", String(500))  # enum 的常见取值，逗号分隔（列名避开 PostgreSQL 保留字 values）
     priority = Column(String(20))       # decisive / important / reference
     source = Column(String(20))         # model / manual
     sort = Column(Integer, default=0)
@@ -139,11 +139,24 @@ def get_engine(url: str | None = None):
     kw = {"connect_args": {"check_same_thread": False, "timeout": 30}} if url.startswith("sqlite") else {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10}
     eng = create_engine(url, **kw)
     Base.metadata.create_all(eng)
+    _migrate(eng)
     if url.startswith("sqlite"):
         with eng.connect() as c:
             c.exec_driver_sql("PRAGMA journal_mode=WAL")
     _ENGINES[url] = eng
     return eng
+
+
+def _migrate(eng):
+    """小型就地迁移：旧库里 category_params.values 列改名为 vals。"""
+    from sqlalchemy import inspect
+    try:
+        cols = {c["name"] for c in inspect(eng).get_columns("category_params")}
+        if "values" in cols and "vals" not in cols:
+            with eng.begin() as c:
+                c.exec_driver_sql('ALTER TABLE category_params RENAME COLUMN "values" TO vals')
+    except Exception:  # noqa
+        pass
 
 
 def get_session(url: str | None = None):
