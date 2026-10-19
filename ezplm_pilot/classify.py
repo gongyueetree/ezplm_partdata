@@ -35,6 +35,7 @@ HERE = Path(__file__).resolve().parent.parent
 class Policy:
     auto_fill_min: float = 0.85
     flag_min: float = 0.85
+    propose_min: float = 0.30        # 低于此置信度的猜测不生成建议（避免噪声进复核队列）
     knn_k: int = 7
     llm_band: tuple = (0.45, 0.85)   # 置信度落在此区间 → 送 LLM 仲裁
     use_llm: bool = True
@@ -48,6 +49,9 @@ class Candidate:
 
 
 # --------------------------------------------------------------------------- 规则层
+_CAPACITY_RE = re.compile(r"\d+(?:\.\d+)?\s*[KMGk]i?[Bb]?(?:ytes?|its?)?\s*(?:主|of)?\s*(?:Flash|SRAM|PSRAM|DRAM|RAM|EEPROM|ROM|闪存|存储器?|内存)", re.I)
+
+
 class RuleEngine:
     def __init__(self, tax: Taxonomy, rules_path: str | Path = HERE / "config" / "rules.yaml"):
         self.tax = tax
@@ -74,10 +78,18 @@ class RuleEngine:
                 out.append(Candidate(cid, conf, "rule:mpn", {"pattern": mpn_re.pattern}))
                 break
         text = f"{p.description} {p.description_en} {p.mpn}"
+        # “128 KB Flash、32 KB SRAM”这类容量+存储词是器件的属性而不是器件类型，先去掉再匹配关键字
+        text_kw = _CAPACITY_RE.sub(" ", text)
+        hits = []
         for kw_re, ex_re, cid, conf in self.keyword:
-            if cid and kw_re.search(text) and not (ex_re and ex_re.search(text)):
-                out.append(Candidate(cid, conf, "rule:keyword", {"pattern": kw_re.pattern}))
-                break
+            if cid and kw_re.search(text_kw) and not (ex_re and ex_re.search(text_kw)):
+                hits.append((cid, conf, kw_re.pattern))
+        if hits:
+            cid, conf, pat = hits[0]
+            others = {c for c, _, _ in hits[1:] if c != cid}
+            if others:                                    # 多条规则指向不同分类：不自动改，降到复核/模型仲裁
+                conf = min(conf, 0.6)
+            out.append(Candidate(cid, conf, "rule:keyword", {"pattern": pat, "conflicts": [self.tax.path(c) for c in others]} if others else {"pattern": pat}))
         return out
 
     def symbol_consistent(self, p: Part, category_id: str) -> bool | None:
@@ -153,11 +165,16 @@ class LlmArbiter:
         self.provider = (provider or os.environ.get("EZPLM_LLM_PROVIDER", "anthropic")).lower()
         default_model = {"anthropic": "claude-haiku-4-5", "gemini": "gemini-2.5-flash", "openai": "gpt-4o-mini"}.get(self.provider, "claude-haiku-4-5")
         self.model = model or os.environ.get("EZPLM_LLM_MODEL") or default_model
+        prefix = {"anthropic": "claude", "gemini": "gemini", "openai": None}.get(self.provider)
+        if prefix and not self.model.lower().startswith(prefix):
+            self.model = default_model          # 模型名与提供商不匹配（如 gemini + claude-haiku）→ 用该提供商默认模型
         calls = {"anthropic": self._anthropic_call, "gemini": self._gemini_call, "openai": self._openai_call}
         self.call = call or calls.get(self.provider, self._anthropic_call)
         keys = {"anthropic": "ANTHROPIC_API_KEY", "gemini": "GEMINI_API_KEY", "openai": "OPENAI_API_KEY"}
         self.available = call is not None or bool(os.environ.get(keys.get(self.provider, "ANTHROPIC_API_KEY")))
         self.n_calls = 0
+        self.n_errors = 0
+        self.last_error = ""
 
     def _anthropic_call(self, prompt: str) -> str:
         import anthropic
@@ -184,9 +201,54 @@ class LlmArbiter:
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 
+    def _ask(self, prompt: str) -> dict | None:
+        self.n_calls += 1
+        try:
+            txt = self.call(prompt)
+            return json.loads(re.search(r"\{.*\}", txt, re.S).group(0))
+        except Exception as e:  # noqa
+            self.n_errors += 1
+            self.last_error = str(e)[:200]
+            return None
+
+    def _part_block(self, p: Part) -> str:
+        return (f"制造商：{p.manufacturer}\n型号：{p.mpn}\n描述：{p.description}\n英文描述：{p.description_en}\n"
+                f"现有符号：{p.symbol or '无'}；封装：{p.footprint or '无'}")
+
+    def arbitrate_open(self, p: Part) -> Candidate | None:
+        """无候选时的两步开放式分类：先选一级分类，再在其叶子里选。"""
+        if not self.available:
+            return None
+        roots = [n for n in self.tax.nodes.values() if not n.parent]
+        opts = "\n".join(f"{i+1}. {n.name}" for i, n in enumerate(roots))
+        js = self._ask("你是电子元器件分类专家。根据器件信息选出最合适的一级分类；若无法判断返回 0。\n" + self._part_block(p) +
+                       f"\n\n一级分类：\n{opts}\n\n只输出 JSON：{{\"index\": <序号>, \"confidence\": <0到1>}}")
+        if not js or not js.get("index"):
+            return Candidate("", 0.0, "llm:none", {"step": "root"})
+        try:
+            root = roots[int(js["index"]) - 1]
+        except Exception:
+            return Candidate("", 0.0, "llm:none", {"step": "root"})
+        leaves = [(cid, path) for cid, path in self.tax.leaf_labels() if cid in self.tax.nodes and self.tax.root_of(cid) == root.id]
+        if not leaves:
+            return Candidate("", 0.0, "llm:none", {"step": "leaf"})
+        opts = "\n".join(f"{i+1}. {path.split(' > ', 1)[-1]}" for i, (cid, path) in enumerate(leaves))
+        js2 = self._ask(f"器件已判定属于一级分类「{root.name}」。请在下列子分类中选出最合适的一个；若都不合适返回 0。\n" + self._part_block(p) +
+                        f"\n\n子分类：\n{opts}\n\n只输出 JSON：{{\"index\": <序号>, \"confidence\": <0到1>, \"reason\": \"<一句话>\"}}")
+        if not js2 or not js2.get("index"):
+            return Candidate("", 0.0, "llm:none", {"step": "leaf", "root": root.name})
+        try:
+            cid = leaves[int(js2["index"]) - 1][0]
+        except Exception:
+            return Candidate("", 0.0, "llm:none", {"step": "leaf"})
+        conf = min(float(js.get("confidence", 0.7)), float(js2.get("confidence", 0.7)))
+        return Candidate(cid, round(conf, 3), "llm", {"reason": js2.get("reason", ""), "model": self.model, "mode": "open-2step"})
+
     def arbitrate(self, p: Part, candidates: list[str]) -> Candidate | None:
         if not self.available:
             return None
+        if not candidates:
+            return self.arbitrate_open(p)
         cands = list(dict.fromkeys(candidates))
         # 补充同父的兄弟叶子，最多 8 个
         for cid in list(cands):
@@ -210,7 +272,9 @@ class LlmArbiter:
             txt = self.call(prompt)
             js = json.loads(re.search(r"\{.*\}", txt, re.S).group(0))
         except Exception as e:  # noqa
-            return Candidate("", 0.0, "llm:error", {"error": str(e)})
+            self.n_errors += 1
+            self.last_error = str(e)[:200]
+            return Candidate("", 0.0, "llm:error", {"error": str(e)[:200]})
         cid = js.get("category_id", "")
         if cid in self.tax.nodes:
             return Candidate(cid, float(js.get("confidence", 0.7)), "llm", {"reason": js.get("reason", ""), "model": self.model})
@@ -255,8 +319,7 @@ class Classifier:
         if kv:
             cands.append(kv)
         merged = self._merge(cands)
-        lo, hi = self.policy.llm_band
-        if self.llm and (merged is None or lo <= merged.conf < hi or (merged and p.category_id and merged.category_id != p.category_id)):
+        if self.llm and (merged is None or merged.conf < self.policy.auto_fill_min or (p.category_id and merged.category_id != p.category_id)):
             seed = [c.category_id for c in cands if c.category_id] + ([p.category_id] if p.category_id else [])
             lv = self.llm.arbitrate(p, seed)
             if lv and lv.category_id:
@@ -276,12 +339,17 @@ class Classifier:
         pol = self.policy
         label = self.tax.path(c.category_id)
         if not p.category_id:
-            action = "auto_fill" if c.conf >= pol.auto_fill_min else "review"
-            tags = ["自动分类"] if action == "auto_fill" else ["待分类"]
+            if c.conf >= pol.auto_fill_min:
+                action, tags = "auto_fill", ["自动分类"]
+            elif c.conf >= pol.propose_min:
+                action, tags = "review", ["待分类"]
+            else:
+                action, tags = "skip", ["待分类"]          # 猜测太弱，只打标签不出建议
         elif c.category_id == p.category_id:
             action, tags = "ok", []
-        else:
-            action = "flag_mismatch" if c.conf >= pol.flag_min else "review"
-            tags = ["分类疑似错误"] if action == "flag_mismatch" else ["分类待复核"]
+        elif c.conf >= pol.flag_min:
+            action, tags = "flag_mismatch", ["分类疑似错误"]
             c.evidence["current_path"] = self.tax.path(p.category_id)
+        else:
+            action, tags = "ok", []                          # 已有分类且无把握推翻 → 不打扰
         return Proposal(p.id, p.mpn, "category_id", p.category_id, c.category_id, label, c.conf, action, c.method, c.evidence, tags)

@@ -124,17 +124,46 @@ def _sym_pins(sym, lib_index: dict | None = None) -> list:
     return pins
 
 
-def parse_symbol_lib(path: str | Path, source_kind: str = "community") -> Iterator[SymbolRec]:
+def _load_symbols(path: Path):
+    """读取一个 .kicad_sym 文件，kiutils 失败时用正则兜底（只取名字/extends/属性/管脚号）。"""
     from kiutils.symbol import SymbolLib
+    return SymbolLib.from_file(str(path)).symbols
+
+
+def parse_symbol_lib(path: str | Path, source_kind: str = "community") -> Iterator[SymbolRec]:
+    """解析一个 .kicad_sym 文件，或 KiCad 9+ 的 X.kicad_symdir 目录（每个符号一个文件，extends 跨文件）。"""
     path = Path(path)
-    lib = SymbolLib.from_file(str(path))
-    index = {s.entryName: s for s in lib.symbols}
-    lic, commit = _license_of(path.parent), _git_commit(path.parent)
-    for s in lib.symbols:
+    if path.is_dir():                                   # X.kicad_symdir：整个目录是一个库
+        lib_name = path.name[:-len(".kicad_symdir")] if path.name.endswith(".kicad_symdir") else path.stem
+        entries = []                                    # [(symbol, file)]
+        for f in sorted(path.glob("*.kicad_sym")):
+            try:
+                entries += [(s, f) for s in _load_symbols(f)]
+            except Exception:  # noqa
+                continue
+        lic, commit = _license_of(path), _git_commit(path)
+    else:
+        lib_name = path.stem
+        if path.parent.name.endswith(".kicad_symdir"):  # 单文件但位于 symdir 内：库名取目录名，extends 在同目录找
+            lib_name = path.parent.name[:-len(".kicad_symdir")]
+            entries = []
+            for f in sorted(path.parent.glob("*.kicad_sym")):
+                try:
+                    entries += [(s, f) for s in _load_symbols(f)]
+                except Exception:  # noqa
+                    continue
+            entries = [(s, f) for s, f in entries if f == path] + [(s, f) for s, f in entries if f != path]
+        else:
+            entries = [(s, path) for s in _load_symbols(path)]
+        lic, commit = _license_of(path.parent), _git_commit(path.parent)
+    index = {s.entryName: s for s, _ in entries}
+    for s, f in entries:
+        if not path.is_dir() and f != path:
+            continue
         props = _sym_props(s)
         pins = _sym_pins(s, index)
         yield SymbolRec(
-            name=s.entryName, lib=path.stem, source=str(path), source_kind=source_kind, license=lic,
+            name=s.entryName, lib=lib_name, source=str(f), source_kind=source_kind, license=lic,
             extends=s.extends or "", pins=pins, pin_count=len({p[0] for p in pins}),
             footprint_field=props.get("Footprint", ""), datasheet=props.get("Datasheet", ""),
             keywords=props.get("ki_keywords", ""), description=props.get("Description", "") or props.get("ki_description", ""),
@@ -225,7 +254,11 @@ def scan(root: str | Path, source_kind: str = "community") -> dict:
     res = {"symbols": [], "footprints": [], "instances": [], "errors": []}
     for p in root.rglob("*"):
         try:
-            if p.suffix == ".kicad_sym":
+            if p.is_dir() and p.name.endswith(".kicad_symdir"):
+                res["symbols"] += list(parse_symbol_lib(p, source_kind))
+            elif p.suffix == ".kicad_sym":
+                if p.parent.name.endswith(".kicad_symdir"):
+                    continue                                # 已随目录整体解析
                 res["symbols"] += list(parse_symbol_lib(p, source_kind))
             elif p.suffix == ".kicad_mod":
                 res["footprints"].append(parse_footprint(p, source_kind))
@@ -249,6 +282,10 @@ class LibIndex:
         create table if not exists instances(ref, value, footprint, mpn, lib_id, source);
         create index if not exists ix_sym_norm on symbols(norm);
         create index if not exists ix_fp_name on footprints(name);
+        create table if not exists symbol_mpns(symbol_id int, mpn, norm, manufacturer, origin, created_at, unique(symbol_id, norm));
+        create table if not exists footprint_mpns(footprint_id int, mpn, norm, manufacturer, origin, created_at, unique(footprint_id, norm));
+        create index if not exists ix_smpn on symbol_mpns(norm);
+        create index if not exists ix_fmpn on footprint_mpns(norm);
         """)
 
     def add(self, scanned: dict):
@@ -260,6 +297,103 @@ class LibIndex:
         self.con.executemany("insert into instances values(?,?,?,?,?,?)",
                              [(i["ref"], i["value"], i["footprint"], i["mpn"], i["lib_id"], i["source"]) for i in scanned["instances"]])
         self.con.commit()
+        self._harvest_mpns(scanned)
+
+    def _harvest_mpns(self, scanned: dict):
+        """把符号 MPN 字段、工程实例的 MPN/Value 收进映射表（一个符号/封装 ↔ 多个 MPN）。"""
+        import datetime as _dt
+        now = _dt.datetime.utcnow().isoformat(timespec="seconds")
+        rows = []
+        for s in scanned["symbols"]:
+            sid = self.con.execute("select rowid from symbols where name=? and source=?", (s.name, s.source)).fetchone()
+            if not sid:
+                continue
+            for m in re.split(r"\s*[,;]\s*", s.mpn_field or ""):
+                if m.strip():
+                    rows.append((sid[0], m.strip(), norm_name(m), "", "symbol-field", now))
+        self.con.executemany("insert or ignore into symbol_mpns values(?,?,?,?,?,?)", rows)
+        # 工程实例：lib_id → 符号，footprint 字段 → 封装，MPN 字段/Value 作为料号
+        rows_s, rows_f = [], []
+        for i in scanned["instances"]:
+            mpn = (i.get("mpn") or "").strip()
+            if not mpn or len(mpn) < 4:
+                continue
+            sym = i["lib_id"].split(":")[-1]
+            for (sid,) in self.con.execute("select rowid from symbols where name=? and source=?", (sym, i["source"])).fetchall():
+                rows_s.append((sid, mpn, norm_name(mpn), "", "project-instance", now))
+            fp = (i.get("footprint") or "").split(":")[-1]
+            if fp:
+                for (fid,) in self.con.execute("select rowid from footprints where name=? order by source_kind limit 1", (fp,)).fetchall():
+                    rows_f.append((fid, mpn, norm_name(mpn), "", "project-instance", now))
+        self.con.executemany("insert or ignore into symbol_mpns values(?,?,?,?,?,?)", rows_s)
+        self.con.executemany("insert or ignore into footprint_mpns values(?,?,?,?,?,?)", rows_f)
+        self.con.commit()
+
+    # ---------- 浏览 / 维护（给管理后台用） ----------
+    def list_items(self, kind: str, q: str = "", has_mpn: str = "", lib: str = "", source_kind: str = "", page: int = 1, size: int = 50):
+        t, mt, key = ("symbols", "symbol_mpns", "symbol_id") if kind == "symbols" else ("footprints", "footprint_mpns", "footprint_id")
+        where, args = ["1=1"], []
+        if q:
+            where.append(f"({t}.name like ? or {t}.lib like ? or exists(select 1 from {mt} m where m.{key}={t}.rowid and m.norm like ?))")
+            args += [f"%{q}%", f"%{q}%", f"%{norm_name(q)}%"]
+        if lib:
+            where.append(f"{t}.lib = ?"); args.append(lib)
+        if source_kind:
+            where.append(f"{t}.source_kind = ?"); args.append(source_kind)
+        if has_mpn == "1":
+            where.append(f"exists(select 1 from {mt} m where m.{key}={t}.rowid)")
+        elif has_mpn == "0":
+            where.append(f"not exists(select 1 from {mt} m where m.{key}={t}.rowid)")
+        w = " and ".join(where)
+        total = self.con.execute(f"select count(*) from {t} where {w}", args).fetchone()[0]
+        cols = "rowid, name, lib, source, source_kind, license, pin_count, footprint_field, mpn_field, description" if kind == "symbols" else "rowid, name, lib, source, source_kind, license, pad_count, attr, model3d, description"
+        rows = self.con.execute(f"select {cols}, (select count(*) from {mt} m where m.{key}={t}.rowid) as n_mpn from {t} where {w} order by name limit ? offset ?", args + [size, (page - 1) * size]).fetchall()
+        return total, rows
+
+    def facets(self, kind: str):
+        t, mt, key = ("symbols", "symbol_mpns", "symbol_id") if kind == "symbols" else ("footprints", "footprint_mpns", "footprint_id")
+        libs = [r[0] for r in self.con.execute(f"select lib from {t} where lib<>'' group by lib order by lib limit 1000")]
+        kinds = [r[0] for r in self.con.execute(f"select source_kind from {t} group by source_kind")]
+        n_with = self.con.execute(f"select count(*) from {t} where exists(select 1 from {mt} m where m.{key}={t}.rowid)").fetchone()[0]
+        n_total = self.con.execute(f"select count(*) from {t}").fetchone()[0]
+        return {"libs": libs, "kinds": kinds, "with_mpn": n_with, "without_mpn": n_total - n_with, "total": n_total}
+
+    def get_item(self, kind: str, rowid: int):
+        t = "symbols" if kind == "symbols" else "footprints"
+        r = self.con.execute(f"select rowid, * from {t} where rowid=?", (rowid,)).fetchone()
+        if not r:
+            return None
+        cols = [d[0] for d in self.con.execute(f"select rowid, * from {t} limit 0").description]
+        d = dict(zip(cols, r))
+        if kind == "symbols":
+            try:
+                d["pins_list"] = json.loads(d.get("pins") or "[]")
+            except Exception:
+                d["pins_list"] = []
+        return d
+
+    def mpns(self, kind: str, rowid: int):
+        mt, key = ("symbol_mpns", "symbol_id") if kind == "symbols" else ("footprint_mpns", "footprint_id")
+        return self.con.execute(f"select mpn, manufacturer, origin, created_at from {mt} where {key}=? order by origin, mpn", (rowid,)).fetchall()
+
+    def add_mpn(self, kind: str, rowid: int, mpn: str, manufacturer: str = "", origin: str = "manual"):
+        import datetime as _dt
+        mt = "symbol_mpns" if kind == "symbols" else "footprint_mpns"
+        self.con.execute(f"insert or ignore into {mt} values(?,?,?,?,?,?)", (rowid, mpn.strip(), norm_name(mpn), manufacturer, origin, _dt.datetime.utcnow().isoformat(timespec="seconds")))
+        self.con.commit()
+
+    def del_mpn(self, kind: str, rowid: int, mpn: str):
+        mt, key = ("symbol_mpns", "symbol_id") if kind == "symbols" else ("footprint_mpns", "footprint_id")
+        self.con.execute(f"delete from {mt} where {key}=? and norm=?", (rowid, norm_name(mpn)))
+        self.con.commit()
+
+    def footprint_by_mpn(self, variants: list[str]):
+        """按 MPN 映射表找封装：返回 (name, lib, source, source_kind, origin) 列表。"""
+        out = []
+        for v in variants:
+            for r in self.con.execute("select f.name, f.lib, f.source, f.source_kind, m.origin from footprint_mpns m join footprints f on f.rowid=m.footprint_id where m.norm=?", (v,)):
+                out.append(r)
+        return out
 
     def stats(self) -> dict:
         q = lambda s: self.con.execute(s).fetchone()[0]
@@ -267,7 +401,9 @@ class LibIndex:
                 "instances": q("select count(*) from instances"), "symbols_with_pins": q("select count(*) from symbols where pin_count>0")}
 
     def all_symbols(self) -> list[tuple]:
-        return self.con.execute("select name, norm, lib, source, source_kind, license, pin_count, footprint_field, datasheet, mpn_field, description from symbols").fetchall()
+        """第 10 列（索引 9）为该符号的全部 MPN（映射表聚合，逗号分隔）。"""
+        return self.con.execute("""select s.name, s.norm, s.lib, s.source, s.source_kind, s.license, s.pin_count, s.footprint_field, s.datasheet,
+                                   coalesce((select group_concat(m.mpn, ',') from symbol_mpns m where m.symbol_id=s.rowid), s.mpn_field), s.description from symbols s""").fetchall()
 
     def footprint(self, name: str):
         return self.con.execute("select name, lib, source, source_kind, pad_count, model3d from footprints where name=? order by source_kind limit 1", (name,)).fetchone()
@@ -374,6 +510,21 @@ def qa_symbol(cand: dict, part: Part, index: LibIndex) -> dict:
     if cand["pin_count"] == 0:
         issues.append("符号无引脚（可能是派生符号未解析到根）")
     return {"ok": not issues, "issues": issues, "checks": checks}
+
+
+def propose_footprints_by_mpn(parts: Iterable[Part], index: LibIndex, auto_min: float = 0.85) -> Iterator[Proposal]:
+    """封装 ← MPN 映射表（工程实例 / 人工维护）。"""
+    for p in parts:
+        if p.footprint:
+            continue
+        hits = index.footprint_by_mpn(mpn_variants(p.mpn))
+        if not hits:
+            continue
+        name, lib, source, kind, origin = hits[0]
+        conf = round((0.95 if origin == "manual" else 0.9) * (0.6 + 0.4 * SOURCE_TRUST.get(kind, 0.5)), 3)
+        action = "auto_fill" if conf >= auto_min else "review"
+        yield Proposal(p.id, p.mpn, "footprint", "", name, f"{lib}:{name}", conf, action, f"kicad-mpn:{kind}:{origin}",
+                       {"source": source, "alternatives": [f"{h[1]}:{h[0]}" for h in hits[1:4]]}, ["封装自动匹配"] if action == "auto_fill" else ["封装待复核"])
 
 
 def propose_symbols(parts: Iterable[Part], index: LibIndex, auto_min: float = 0.85) -> Iterator[Proposal]:

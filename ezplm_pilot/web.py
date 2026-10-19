@@ -23,7 +23,7 @@ from sqlalchemy import func, or_, select
 
 from . import pipeline, settings
 from .jobs import manager
-from .staging import StagedCategory, StagedPart, StagedProposal, get_session
+from .staging import CategoryParam, StagedCategory, StagedPart, StagedProposal, get_session
 
 app = FastAPI(title="ezPLM 暂存数据平台")
 security = HTTPBasic(auto_error=False)
@@ -141,16 +141,18 @@ JOBS = """{% extends "base" %}{% block body %}
 
 <div>
 <div class=panel><h2>当前任务 {% if busy %}<form class=inline method=post action="/jobs/stop"><button class=bad>停止</button></form>{% endif %}</h2>
-<div id=jobbox>{% if job %}<div><b>{{ job.id }}</b> <span class="status-{{ job.status }}">{{ job.status }}</span> · 进度 {{ job.progress.done }}{% if job.progress.total %} / {{ job.progress.total }}{% endif %}</div>
+<div id=jobbox>{% if job %}<div><b>{{ job.id }}</b> <span class="status-{{ job.status }}">{{ status_zh.get(job.status, job.status) }}</span>{% if job.status in ('running','queued') or job.progress.total %} · 进度 {{ job.progress.done }}{% if job.progress.total %} / {{ job.progress.total }}{% endif %}{% endif %}{% if job.finished_at %} · 结束于 {{ job.finished_at }}{% endif %}</div>
 <pre id=joblog>{{ job.log|join('\\n') }}</pre>{% else %}<p class=mute>无</p>{% endif %}</div></div>
 <div class=panel><h2>历史任务</h2>
 <table><tr><th>任务</th><th>状态</th><th>开始</th><th>结束</th><th>结果</th></tr>
-{% for h in history %}<tr><td>{{ h.id }}</td><td class="status-{{ h.status }}">{{ h.status }}</td><td class=mute>{{ h.started_at }}</td><td class=mute>{{ h.finished_at }}</td><td class=mute style="max-width:300px">{{ h.result }}</td></tr>{% endfor %}</table></div>
+{% for h in history %}<tr><td>{{ h.id }}</td><td class="status-{{ h.status }}">{{ status_zh.get(h.status, h.status) }}</td><td class=mute>{{ h.started_at }}</td><td class=mute>{{ h.finished_at }}</td><td class=mute style="max-width:300px">{{ h.result }}</td></tr>{% endfor %}</table></div>
 </div></div>
 {% endblock %}{% block script %}{% if busy %}<script>
-setInterval(async()=>{const r=await fetch('/api/jobs/current');const j=await r.json();if(!j){location.reload();return}
-document.getElementById('jobbox').innerHTML='<div><b>'+j.id+'</b> <span class="status-'+j.status+'">'+j.status+'</span> · 进度 '+j.progress.done+(j.progress.total?' / '+j.progress.total:'')+'</div><pre id=joblog>'+j.log.join('\\n').replace(/</g,'&lt;')+'</pre>';
-const p=document.getElementById('joblog');p.scrollTop=p.scrollHeight;if(j.status!=='running'&&j.status!=='queued'){setTimeout(()=>location.reload(),1500)}},2000);
+const ZH={queued:'排队中',running:'运行中',done:'已完成',failed:'失败',stopped:'已停止'};
+setInterval(async()=>{const r=await fetch('/api/jobs/current');const j=await r.json();if(!j){location.replace(location.pathname);return}
+const fin=j.status!=='running'&&j.status!=='queued';
+document.getElementById('jobbox').innerHTML='<div><b>'+j.id+'</b> <span class="status-'+j.status+'">'+(ZH[j.status]||j.status)+'</span>'+(fin&&!j.progress.total?'':' · 进度 '+j.progress.done+(j.progress.total?' / '+j.progress.total:''))+'</div><pre id=joblog>'+j.log.join('\\n').replace(/</g,'&lt;')+'</pre>';
+const p=document.getElementById('joblog');p.scrollTop=p.scrollHeight;if(fin){setTimeout(()=>location.replace(location.pathname),1500)}},2000);
 </script>{% endif %}{% endblock %}"""
 
 PARTS = """{% extends "base" %}{% block body %}
@@ -160,10 +162,11 @@ PARTS = """{% extends "base" %}{% block body %}
 <select name=changed><option value="">— 是否有新值 —</option><option value=1 {{ 'selected' if changed=='1' }}>有新值</option><option value=0 {{ 'selected' if changed=='0' }}>无新值</option></select>
 <select name=processed><option value="">— 处理状态 —</option><option value=1 {{ 'selected' if processed=='1' }}>已处理</option><option value=0 {{ 'selected' if processed=='0' }}>未处理</option></select>
 <input name=tag value="{{ tag }}" placeholder="标签" style="width:140px"><button class=pri>筛选</button><span class=mute>共 {{ total }} 条</span></form>
-<table><tr><th>型号</th><th>制造商</th><th>分类（原 → 新）</th><th>符号</th><th>封装</th><th>PDF</th><th>标签</th><th>价值分</th></tr>
+<table><tr><th>型号</th><th>制造商</th><th>描述</th><th>分类（原 → 新）</th><th>待复核建议</th><th>符号</th><th>封装</th><th>PDF</th><th>标签</th><th>分</th></tr>
 {% for p in rows %}<tr>
-<td><a href="/parts/{{ p.id }}">{{ p.mpn }}</a></td><td class=mute>{{ p.manufacturer }}</td>
-<td>{{ p.orig_category or '<span class=mute>空</span>'|safe }}{% if p.new_category %} → <span class=diff>{{ p.new_category }}</span>{% endif %}</td>
+<td><a href="/parts/{{ p.id }}">{{ p.mpn }}</a></td><td class=mute>{{ p.manufacturer }}</td><td class=mute style="max-width:280px">{{ (p.description or '')[:90] }}</td>
+<td style="max-width:220px">{{ paths.get(p.orig_category_id) or '<span class=mute>空</span>'|safe }}{% if p.new_category_id %}<br>→ <span class=diff>{{ paths.get(p.new_category_id, p.new_category) }}</span>{% endif %}</td>
+<td style="max-width:220px">{% for s in sugg.get(p.id, []) %}<div><span class=mute>{{ s.field }}</span> {{ s.proposed_label or s.proposed }} <span class=mute>{{ '%.2f'|format(s.confidence or 0) }}</span></div>{% endfor %}</td>
 <td>{{ p.orig_symbol or '' }}{% if p.new_symbol %}<span class=diff> → {{ p.new_symbol }}</span>{% endif %}</td>
 <td>{{ p.orig_footprint or '' }}{% if p.new_footprint %}<span class=diff> → {{ p.new_footprint }}</span>{% endif %}</td>
 <td>{{ '有' if p.orig_has_pdf else '无' }}</td><td>{% for t in (p.tags or '').split(',') if t %}<span class=tag>{{ t }}</span>{% endfor %}</td><td>{{ p.value_score }}</td>
@@ -199,7 +202,7 @@ PART = """{% extends "base" %}{% block topright %}<span class=mute>{{ p.manufact
 <td style="white-space:nowrap">{% if r.review_status=='pending' %}<form class=inline method=post action="/review/{{ r.id }}/approve"><button class=ok>通过</button></form> <form class=inline method=post action="/review/{{ r.id }}/reject"><button class=bad>驳回</button></form>
 {% elif r.review_status=='auto' %}<form class=inline method=post action="/review/{{ r.id }}/revert"><button class=bad>撤销自动写入</button></form>{% endif %}</td>
 <td><details><summary class=mute>查看</summary><pre style="background:#f3f4f6;color:#111">{{ r.evidence_json }}</pre></details></td></tr>{% endfor %}</table>
-<h2>物料属性 / 备注</h2><pre style="background:#f3f4f6;color:#111">{{ p.attributes_json }}
+<h2>物料属性 / 备注</h2><pre style="background:#f3f4f6;color:#111">{{ p.attributes_json if p.attributes_json not in ('{}', '', None) else '（无属性；处理时会自动从 ezPLM 详情接口拉取）' }}
 {{ p.notes or '' }}</pre>
 {% endblock %}"""
 
@@ -221,18 +224,82 @@ REVIEW = """{% extends "base" %}{% block body %}
 <div class=pager>{% if page>1 %}<a href="?{{ qs }}&page={{ page-1 }}">上一页</a>{% endif %}<span>第 {{ page }} 页</span>{% if page*size<total %}<a href="?{{ qs }}&page={{ page+1 }}">下一页</a>{% endif %}</div>
 {% endblock %}"""
 
-CATEGORIES = """{% extends "base" %}{% block body %}
-<p class=mute>括号内：原分类物料数 / 新分类物料数。分类树来自 ezPLM（ingest 时同步）。</p>
-<div class="panel tree">{% macro node(n) %}<li>{{ n.name }} <span class=cnt>({{ counts.get(n.id, 0) }} / {{ ncounts.get(n.id, 0) }})</span>{% if n.children %}<ul>{% for c in n.children %}{{ node(c) }}{% endfor %}</ul>{% endif %}</li>{% endmacro %}
+CATEGORIES = """{% extends "base" %}{% block topright %}<form class=inline method=post action="/jobs/start"><input type=hidden name=kind value=params><button {{ 'disabled' if busy }}>让模型为所有叶子分类生成（跳过已有）</button></form> <form class=inline method=post action="/categories/seed"><button class=pri>挂载内置参数建议（补齐缺失）</button></form> <form class=inline method=post action="/categories/seed?replace=1" onsubmit="return confirm('用最新内置模板刷新所有“内置建议”来源的参数？人工/模型参数不受影响。')"><button>刷新内置建议</button></form> <a class=btn href="/categories/params.json">导出全部参数 JSON</a>{% endblock %}{% block body %}
+<p class=mute>括号内：原分类物料数 / 新分类物料数。"关键参数（N）"点击进入编辑；已有 {{ n_with }} 个分类配置了参数（内置建议 {{ n_seed }} 个，人工/模型 {{ n_with - n_seed }} 个）。内置建议在拉取分类树后自动挂上，可直接编辑；编辑保存后来源变为“人工”，不会再被内置模板覆盖。</p>
+<div class="panel tree">{% macro node(n) %}<li>{{ n.name }} <span class=cnt>({{ counts.get(n.id, 0) }} / {{ ncounts.get(n.id, 0) }})</span>
+ <a href="/categories/{{ n.id }}/params" style="margin-left:8px;color:{{ '#9ca3af' if not pcounts.get(n.id) else ('#059669' if pseed.get(n.id) else '#2563eb') }}">关键参数（{{ pcounts.get(n.id, 0) }}）</a>{% if n.children %}<ul>{% for c in n.children %}{{ node(c) }}{% endfor %}</ul>{% endif %}</li>{% endmacro %}
 <ul>{% for r in roots %}{{ node(r) }}{% endfor %}</ul></div>
 {% endblock %}"""
 
-LIBRARY = """{% extends "base" %}{% block body %}
-<form class=filters method=get><input name=q value="{{ q }}" placeholder="符号/封装名、库名" style="width:260px"><select name=kind><option value=symbols {{ 'selected' if kind=='symbols' }}>符号</option><option value=footprints {{ 'selected' if kind=='footprints' }}>封装</option></select><button class=pri>搜索</button><span class=mute>索引：符号 {{ stats.symbols }} / 封装 {{ stats.footprints }} / 工程元件实例 {{ stats.instances }}</span></form>
-{% if kind=='symbols' %}<table><tr><th>符号</th><th>库</th><th>引脚数</th><th>默认封装</th><th>MPN 字段</th><th>来源</th><th>可信级</th><th>License</th></tr>
-{% for r in rows %}<tr><td><b>{{ r[0] }}</b></td><td>{{ r[1] }}</td><td>{{ r[2] }}</td><td class=mute>{{ r[3] }}</td><td class=mute>{{ r[4] }}</td><td class=mute style="max-width:300px;word-break:break-all">{{ r[5] }}</td><td>{{ r[6] }}</td><td>{{ r[7] }}</td></tr>{% endfor %}</table>
-{% else %}<table><tr><th>封装</th><th>库</th><th>焊盘数</th><th>类型</th><th>3D</th><th>来源</th><th>可信级</th></tr>
-{% for r in rows %}<tr><td><b>{{ r[0] }}</b></td><td>{{ r[1] }}</td><td>{{ r[2] }}</td><td>{{ r[3] }}</td><td class=mute>{{ '有' if r[4] else '' }}</td><td class=mute style="max-width:300px;word-break:break-all">{{ r[5] }}</td><td>{{ r[6] }}</td></tr>{% endfor %}</table>{% endif %}
+PARAMS = """{% extends "base" %}{% block topright %}<a class=btn href="/categories">← 返回分类树</a>{% endblock %}{% block body %}
+<p class=mute>{{ path }} · 物料 {{ n_parts }} 条。选型这一类器件时要问的参数，以及此类器件常见的取值范围。</p>
+<form method=post action="/categories/{{ cid }}/params" id=pf>
+<table id=ptable><tr><th>参数</th><th>键</th><th>类型</th><th>单位</th><th>常见取值</th><th>优先级</th><th>来源</th><th></th></tr>
+{% for r in rows %}<tr>
+<td><input name=name value="{{ r.name }}" style="width:190px"></td><td><input name=key value="{{ r.key }}" style="width:120px"></td>
+<td><select name=ptype>{% for k,l in ptypes.items() %}<option value="{{ k }}" {{ 'selected' if r.ptype==k }}>{{ l }}</option>{% endfor %}</select></td>
+<td><input name=unit value="{{ r.unit }}" style="width:60px"></td>
+<td><input name=vmin value="{{ r.vmin }}" style="width:90px" placeholder="最小"> – <input name=vmax value="{{ r.vmax }}" style="width:90px" placeholder="最大"><br><input name=values value="{{ r['values'] }}" style="width:200px;margin-top:3px" placeholder="多选一的取值，逗号分隔"></td>
+<td><select name=priority>{% for k,l in prios.items() %}<option value="{{ k }}" {{ 'selected' if r.priority==k }}>{{ l }}</option>{% endfor %}</select></td>
+<td class=mute><input type=hidden name=source value="{{ r.source }}">{{ {'model':'模型建议','seed':'内置建议'}.get(r.source, '人工') }}</td>
+<td><button type=button onclick="this.closest('tr').remove()">✕</button></td></tr>{% endfor %}
+</table>
+<p><button type=button onclick="addRow()">＋ 添加参数</button> <button class=pri>保存参数</button>
+<button formaction="/categories/{{ cid }}/params/suggest" formmethod=post {{ 'disabled' if not llm_ok }}>让模型建议（追加到表格，需保存）</button>
+<button formaction="/categories/{{ cid }}/params/suggest?replace=1" formmethod=post {{ 'disabled' if not llm_ok }} onclick="return confirm('用模型建议替换现有参数？（仍需保存）')">让模型重新生成</button>
+{% if not llm_ok %}<span class=mute>（设置里配置 LLM 后可用）</span>{% endif %}</p></form>
+<template id=rowtpl><tr><td><input name=name style="width:190px"></td><td><input name=key style="width:120px"></td><td><select name=ptype>{% for k,l in ptypes.items() %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></td><td><input name=unit style="width:60px"></td><td><input name=vmin style="width:90px" placeholder="最小"> – <input name=vmax style="width:90px" placeholder="最大"><br><input name=values style="width:200px;margin-top:3px" placeholder="多选一的取值"></td><td><select name=priority>{% for k,l in prios.items() %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></td><td class=mute><input type=hidden name=source value=manual>人工</td><td><button type=button onclick="this.closest('tr').remove()">✕</button></td></tr></template>
+<script>function addRow(){document.getElementById('ptable').appendChild(document.getElementById('rowtpl').content.cloneNode(true))}</script>
+{% endblock %}"""
+
+LIBRARY = """{% extends "base" %}{% block topright %}<a class=btn href="/library/upload">导入符号 / 封装 / 工程</a>{% endblock %}{% block body %}
+<div class=cards>
+<div class=card><div class=n>{{ f.total }}</div><div class=l>{{ '符号' if kind=='symbols' else '封装' }}总数</div></div>
+<div class=card><div class=n>{{ f.with_mpn }}</div><div class=l>已关联 MPN</div></div>
+<div class=card><div class=n>{{ f.without_mpn }}</div><div class=l>未关联 MPN（通用件或待补）</div></div>
+<div class=card><div class=n>{{ stats.instances }}</div><div class=l>工程元件实例（MPN 来源）</div></div>
+</div>
+{% if not data_mounted %}<div class="msg err">⚠ /data 不是持久化磁盘卷，索引会在重新部署时清空。请在 Railway 服务 → Settings → Volumes 挂载 /data，然后重新扫描。</div>{% endif %}
+<form class=filters method=get>
+<select name=kind onchange="this.form.submit()"><option value=symbols {{ 'selected' if kind=='symbols' }}>符号</option><option value=footprints {{ 'selected' if kind=='footprints' }}>封装</option></select>
+<input name=q value="{{ q }}" placeholder="名称 / 库名 / MPN" style="width:220px">
+<select name=has_mpn><option value="">— MPN —</option><option value=1 {{ 'selected' if has_mpn=='1' }}>有 MPN</option><option value=0 {{ 'selected' if has_mpn=='0' }}>无 MPN</option></select>
+<select name=lib><option value="">— 库 / 分类 —</option>{% for l in f.libs %}<option {{ 'selected' if lib==l }}>{{ l }}</option>{% endfor %}</select>
+<select name=source_kind><option value="">— 来源级别 —</option>{% for k in f.kinds %}<option {{ 'selected' if source_kind==k }}>{{ k }}</option>{% endfor %}</select>
+<button class=pri>筛选</button><span class=mute>共 {{ total }} 条</span></form>
+{% if kind=='symbols' %}<table><tr><th>符号</th><th>库 / 分类</th><th>引脚</th><th>默认封装</th><th>MPN 数</th><th>来源</th><th>级别</th><th>License</th></tr>
+{% for r in rows %}<tr><td><a href="/library/symbols/{{ r[0] }}"><b>{{ r[1] }}</b></a></td><td>{{ r[2] }}</td><td>{{ r[6] }}</td><td class=mute>{{ r[7] }}</td><td>{{ r[10] }}</td><td class=mute style="max-width:260px;word-break:break-all">{{ r[3].split('/sources/')[-1] }}</td><td>{{ r[4] }}</td><td>{{ r[5] }}</td></tr>{% endfor %}</table>
+{% else %}<table><tr><th>封装</th><th>库 / 分类</th><th>焊盘</th><th>类型</th><th>3D</th><th>MPN 数</th><th>来源</th><th>级别</th></tr>
+{% for r in rows %}<tr><td><a href="/library/footprints/{{ r[0] }}"><b>{{ r[1] }}</b></a></td><td>{{ r[2] }}</td><td>{{ r[6] }}</td><td>{{ r[7] }}</td><td class=mute>{{ '有' if r[8] else '' }}</td><td>{{ r[10] }}</td><td class=mute style="max-width:260px;word-break:break-all">{{ r[3].split('/sources/')[-1] }}</td><td>{{ r[4] }}</td></tr>{% endfor %}</table>{% endif %}
+<div class=pager>{% if page>1 %}<a href="?{{ qs }}&page={{ page-1 }}">上一页</a>{% endif %}<span>第 {{ page }} / {{ ((total-1)//size)+1 if total else 1 }} 页</span>{% if page*size<total %}<a href="?{{ qs }}&page={{ page+1 }}">下一页</a>{% endif %}</div>
+{% endblock %}"""
+
+LIBITEM = """{% extends "base" %}{% block topright %}<a class=btn href="/library?kind={{ kind }}">← 返回列表</a>{% endblock %}{% block body %}
+<div class=grid2>
+<div class=panel><h2>基本信息</h2><table class=kv>
+<tr><td>库 / 分类</td><td>{{ d.lib }}</td></tr><tr><td>来源</td><td style="word-break:break-all">{{ d.source }}（{{ d.source_kind }}，commit {{ d.commit_ or '-' }}）</td></tr><tr><td>License</td><td>{{ d.license or '未知' }}</td></tr>
+{% if kind=='symbols' %}<tr><td>引脚数</td><td>{{ d.pin_count }}</td></tr><tr><td>默认封装</td><td>{{ d.footprint_field }}</td></tr><tr><td>数据手册</td><td>{{ d.datasheet }}</td></tr><tr><td>派生自</td><td>{{ d.extends or '-' }}</td></tr><tr><td>关键词</td><td>{{ d.keywords }}</td></tr>
+{% else %}<tr><td>焊盘数</td><td>{{ d.pad_count }}</td></tr><tr><td>类型</td><td>{{ d.attr }}</td></tr><tr><td>3D 模型</td><td>{{ d.model3d or '-' }}</td></tr><tr><td>标签</td><td>{{ d.tags }}</td></tr>{% endif %}
+<tr><td>描述</td><td>{{ d.description }}</td></tr></table>
+{% if kind=='symbols' and d.pins_list %}<h2>引脚（{{ d.pins_list|length }}）</h2><div style="max-height:260px;overflow:auto"><table><tr><th>编号</th><th>名称</th><th>类型</th></tr>{% for pin in d.pins_list %}<tr><td>{{ pin[0] }}</td><td>{{ pin[1] }}</td><td class=mute>{{ pin[2] }}</td></tr>{% endfor %}</table></div>{% endif %}</div>
+<div class=panel><h2>关联的 MPN（{{ mpns|length }}）</h2>
+<p class=mute>一个{{ '符号' if kind=='symbols' else '封装' }}可对应多个料号。来源：symbol-field = 符号自带 MPN 字段；project-instance = 开源工程里的元件实例；manual = 人工添加。</p>
+<table><tr><th>MPN</th><th>制造商</th><th>来源</th><th>添加时间</th><th></th></tr>
+{% for m in mpns %}<tr><td><b>{{ m[0] }}</b></td><td class=mute>{{ m[1] }}</td><td class=mute>{{ m[2] }}</td><td class=mute>{{ m[3] }}</td><td><form class=inline method=post action="/library/{{ kind }}/{{ d.rowid }}/mpn/del"><input type=hidden name=mpn value="{{ m[0] }}"><button class=bad>删除</button></form></td></tr>{% endfor %}</table>
+<form class=frm method=post action="/library/{{ kind }}/{{ d.rowid }}/mpn/add"><div class=row><div><label>添加 MPN（可多个，逗号分隔）</label><input name=mpn style="width:100%" placeholder="如 MCP6004T-I/ST, MCP6004-E/SL"></div><div><label>制造商（可选）</label><input name=manufacturer></div></div><p><button class=pri>添加</button></p></form></div></div>
+{% endblock %}"""
+
+LIBUPLOAD = """{% extends "base" %}{% block topright %}<a class=btn href="/library">← 返回列表</a>{% endblock %}{% block body %}
+<div class=grid2><div class=panel><h2>上传文件</h2>
+<p class=mute>支持：单个 <code>.kicad_sym</code>（符号库）、<code>.kicad_mod</code>（封装）、或把整个 KiCad 工程/库目录打成的 <code>.zip</code>（会递归解析其中的 .kicad_sym / .kicad_mod / .kicad_sch / .kicad_pcb；原理图里的元件实例会自动产生 符号↔MPN、封装↔MPN 映射）。Altium / EasyEDA 请先转成 KiCad 格式再上传。</p>
+<form class=frm method=post action="/library/upload" enctype=multipart/form-data>
+<label>文件</label><input type=file name=file required>
+<div class=row><div><label>来源标签（用于区分，如 "ST评估板-2026"）</label><input name=label required placeholder="来源名称"></div>
+<div><label>可信级别</label><select name=source_kind>{% for k in ['vendor-official','kicad-official','lcsc-easyeda','digikey-library','oshw-product','community'] %}<option value="{{ k }}" {{ 'selected' if k=='oshw-product' }}>{{ k }}</option>{% endfor %}</select></div></div>
+<label>License（可选，如 CC-BY-SA-4.0 / MIT）</label><input name=license>
+<p><button class=pri {{ 'disabled' if busy }}>上传并解析</button></p></form></div>
+<div class=panel><h2>已导入的来源</h2><table><tr><th>来源</th><th>符号</th><th>封装</th><th>实例</th></tr>{% for r in sources %}<tr><td style="word-break:break-all">{{ r[0] }}</td><td>{{ r[1] }}</td><td>{{ r[2] }}</td><td>{{ r[3] }}</td></tr>{% endfor %}</table>
+<p class=mute style="margin-top:12px">批量来源（Git 仓库）请在"任务控制 → ③ 扫描"里克隆。</p></div></div>
 {% endblock %}"""
 
 EXPORT = """{% extends "base" %}{% block body %}
@@ -268,12 +335,12 @@ SETTINGS = """{% extends "base" %}{% block body %}
 <p><button class=pri>保存</button></p></form></div>
 <div class=panel><h2>连接测试</h2><form class=inline method=post action="/settings/test"><button>测试 ezPLM API</button></form> <form class=inline method=post action="/settings/test-llm"><button>测试 LLM</button></form>{% if test %}<pre>{{ test }}</pre>{% endif %}
 <h2 style="margin-top:18px">运行环境</h2><table class=kv>
-<tr><td>数据库</td><td>{{ dbinfo }}</td></tr><tr><td>数据目录</td><td>{{ data_dir }}</td></tr><tr><td>登录保护</td><td>{{ '已开启（ADMIN_PASSWORD）' if auth_on else '未开启——部署到公网前请设置 ADMIN_PASSWORD' }}</td></tr>
+<tr><td>数据库</td><td>{{ dbinfo }}</td></tr><tr><td>数据目录</td><td>{{ data_dir }}{% if not data_mounted %} <span style="color:var(--bad)">⚠ 不是持久化磁盘卷：每次重新部署会清空符号/封装索引和克隆的库。请在 Railway 服务 → Settings → Volumes 挂载到 {{ data_dir }}</span>{% endif %}</td></tr><tr><td>登录保护</td><td>{{ '已开启（ADMIN_PASSWORD）' if auth_on else '未开启——部署到公网前请设置 ADMIN_PASSWORD' }}</td></tr>
 <tr><td>规则文件</td><td>config/rules.yaml（分类）、config/packages.yaml（封装映射）、config/manufacturers.yaml（URL 模板）——改完提交到 GitHub 重新部署即可生效</td></tr></table></div></div>
 {% endblock %}"""
 
 env = Environment(loader=DictLoader({"base": BASE, "home": HOME, "jobs": JOBS, "parts": PARTS, "part": PART, "review": REVIEW,
-                                     "categories": CATEGORIES, "library": LIBRARY, "export": EXPORT, "settings": SETTINGS}), autoescape=True)
+                                     "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS}), autoescape=True)
 env.globals["pct"] = lambda a, b: round(100.0 * (a or 0) / b, 1) if b else 0
 
 
@@ -298,6 +365,13 @@ def home(request: Request, user: str = Depends(auth)):
 
 
 # ---- 任务
+def _data_mounted() -> bool:
+    d = str(settings.DATA_DIR)
+    if d in (".", "/app", "/home/claude", "/home/claude/ezplm_pilot") or not d.startswith("/data"):
+        return True          # 本地运行不提示
+    return os.path.ismount(d)
+
+
 def _lib_stats():
     from .kicad import LibIndex
     try:
@@ -311,7 +385,8 @@ def jobs_page(request: Request, user: str = Depends(auth)):
     job = manager.current.to_dict() if manager.current else None
     sources = sorted(p.name for p in settings.SOURCES_DIR.iterdir() if p.is_dir()) if settings.SOURCES_DIR.exists() else []
     return render("jobs", request, title="任务控制", nav="jobs", user=user, s=pipeline.summary(), cfg=settings.get_all(), job=job,
-                  history=[h.to_dict() for h in manager.history], lib=_lib_stats(), sources=sources)
+                  history=[h.to_dict() for h in manager.history], lib=_lib_stats(), sources=sources,
+                  status_zh={"queued": "排队中", "running": "运行中", "done": "已完成", "failed": "失败", "stopped": "已停止"})
 
 
 def _run_ingest(job, source, batch, max_batches, reset, incremental=False):
@@ -374,6 +449,13 @@ async def jobs_start(request: Request, user: str = Depends(auth)):
             manager.start("scan", lambda j: _run_scan(j, f["path"].strip(), f.get("source_kind", "community")), {"path": f["path"], "kind": f.get("source_kind")})
         elif kind == "export":
             manager.start("export", lambda j: _run_export(j, False), {"apply": False})
+        elif kind == "params":
+            from . import params as P
+            call = _llm_call_or_none()
+            if not call:
+                return back("/categories", "请先在设置里配置 LLM", True)
+            manager.start("params", lambda j: P.bulk_generate(call, only_missing=True, stop=j.should_stop, log=j.say, progress=lambda p: j.progress.update(p)), {"only_missing": True})
+            return back("/jobs", "已启动：为所有叶子分类生成关键参数建议")
         else:
             return back("/jobs", "未知任务类型", True)
     except RuntimeError as e:
@@ -425,8 +507,13 @@ def parts(request: Request, q: str = "", missing: str = "", changed: str = "", p
         stmt = stmt.where(StagedPart.tags.ilike(f"%{tag}%"))
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar()
     rows = db.execute(stmt.order_by(StagedPart.value_score.desc(), StagedPart.mpn).offset((page - 1) * size).limit(size)).scalars().all()
+    tax = pipeline.load_taxonomy(db)
+    paths = {cid: tax.path(cid) for cid in {r.orig_category_id for r in rows} | {r.new_category_id for r in rows} if cid and cid in tax.nodes}
+    sugg: dict = {}
+    for s_ in db.execute(select(StagedProposal).where(StagedProposal.part_id.in_([r.id for r in rows]), StagedProposal.review_status == "pending").order_by(StagedProposal.confidence.desc())).scalars():
+        sugg.setdefault(s_.part_id, []).append(s_) if len(sugg.get(s_.part_id, [])) < 2 else None
     qs = f"q={q}&missing={missing}&changed={changed}&processed={processed}&tag={tag}"
-    return render("parts", request, title="物料信息", nav="parts", user=user, rows=rows, total=total, page=page, size=size, q=q, missing=missing, changed=changed, processed=processed, tag=tag, qs=qs)
+    return render("parts", request, title="物料信息", nav="parts", user=user, rows=rows, total=total, page=page, size=size, q=q, missing=missing, changed=changed, processed=processed, tag=tag, qs=qs, paths=paths, sugg=sugg)
 
 
 @app.get("/parts/{pid}", response_class=HTMLResponse)
@@ -517,30 +604,219 @@ def review_do(rid: int, decision: str, next: str = "", user: str = Depends(auth)
 # ---- 分类 / 库
 @app.get("/categories", response_class=HTMLResponse)
 def categories(request: Request, user: str = Depends(auth)):
+    from . import params as P
     db = get_session()
     tax = pipeline.load_taxonomy(db)
     counts = dict(db.execute(select(StagedPart.orig_category_id, func.count()).group_by(StagedPart.orig_category_id)).all())
     ncounts = dict(db.execute(select(StagedPart.new_category_id, func.count()).where(StagedPart.new_category_id.isnot(None)).group_by(StagedPart.new_category_id)).all())
+    pcounts = P.counts(db)
+    pseed = dict(db.execute(select(CategoryParam.category_id, func.count()).where(CategoryParam.source == "seed").group_by(CategoryParam.category_id)).all())
 
     def build(nid):
         n = tax.nodes[nid]
         return {"name": n.name, "id": n.id, "children": [build(c) for c in n.children]}
     roots = [build(n.id) for n in tax.nodes.values() if not n.parent]
-    return render("categories", request, title="分类", nav="categories", user=user, roots=roots, counts=counts, ncounts=ncounts)
+    return render("categories", request, title="分类与关键参数", nav="categories", user=user, roots=roots, counts=counts, ncounts=ncounts, pcounts=pcounts, pseed=pseed, n_with=len(pcounts), n_seed=len(pseed))
+
+
+@app.post("/categories/seed")
+def categories_seed(replace: str = "", user: str = Depends(auth)):
+    from . import params as P
+    try:
+        st = P.seed_load(get_session(), replace_seed=bool(replace))
+    except Exception as e:  # noqa
+        return back("/categories", f"挂载失败：{str(e)[:150]}", True)
+    return back("/categories", f"已为 {st['seeded']} 个分类挂上内置参数建议，跳过 {st['skipped']} 个（已有人工/模型参数）")
+
+
+@app.on_event("startup")
+def _seed_on_startup():
+    """启动时自动给没有参数的叶子分类挂上内置建议（分类树尚未拉取时静默跳过）。"""
+    try:
+        from . import params as P
+        st = P.seed_load(get_session())
+        if st["seeded"]:
+            print(f"[params] 内置参数建议已挂到 {st['seeded']} 个分类")
+    except Exception as e:  # noqa
+        print("[params] seed skipped:", e)
+
+
+def _llm_call_or_none():
+    from .classify import LlmArbiter
+    cfg = settings.apply_env()
+    arb = LlmArbiter(pipeline.load_taxonomy(get_session()), provider=cfg["llm_provider"], model=cfg["llm_model"])
+    return arb.call if arb.available else None
+
+
+@app.get("/categories/params.json")
+def params_export(user: str = Depends(auth)):
+    from . import params as P
+    db = get_session()
+    return JSONResponse(P.export_all(db, pipeline.load_taxonomy(db)), headers={"Content-Disposition": "attachment; filename=category_params.json"})
+
+
+@app.get("/categories/{cid}/params", response_class=HTMLResponse)
+def params_page(request: Request, cid: str, user: str = Depends(auth)):
+    from . import params as P
+    db = get_session()
+    tax = pipeline.load_taxonomy(db)
+    if cid not in tax.nodes:
+        raise HTTPException(404)
+    rows = [dict(name=r.name, key=r.key, ptype=r.ptype, unit=r.unit, vmin=r.vmin, vmax=r.vmax, values=r.values, priority=r.priority, source=r.source) for r in P.list_params(db, cid)]
+    extra = request.query_params.get("suggest")
+    if extra:
+        try:
+            sug = json.loads(_SUGGEST_CACHE.pop(extra, "[]"))
+            rows = (rows if request.query_params.get("mode") != "replace" else []) + sug
+        except Exception:
+            pass
+    n_parts = db.execute(select(func.count(StagedPart.id)).where((StagedPart.new_category_id == cid) | (StagedPart.orig_category_id == cid))).scalar()
+    return render("params", request, title=f"关键参数 · {tax.nodes[cid].name}", nav="categories", user=user, cid=cid, path=tax.path(cid), rows=rows,
+                  ptypes=P.PTYPES, prios=P.PRIORITIES, n_parts=n_parts, llm_ok=_llm_call_or_none() is not None)
+
+
+_SUGGEST_CACHE: dict = {}
+
+
+@app.post("/categories/{cid}/params")
+async def params_save(request: Request, cid: str, user: str = Depends(auth)):
+    from . import params as P
+    f = await request.form()
+    cols = ("name", "key", "ptype", "unit", "vmin", "vmax", "values", "priority", "source")
+    lists = {c: f.getlist(c) for c in cols}
+    n = max(len(v) for v in lists.values()) if lists else 0
+    rows = [{c: (lists[c][i] if i < len(lists[c]) else "") for c in cols} for i in range(n)]
+    P.save_params(get_session(), cid, rows)
+    return back(f"/categories/{cid}/params", f"已保存 {len([r for r in rows if r['name'].strip()])} 个参数")
+
+
+@app.post("/categories/{cid}/params/suggest")
+def params_suggest(cid: str, replace: str = "", user: str = Depends(auth)):
+    from . import params as P
+    call = _llm_call_or_none()
+    if not call:
+        return back(f"/categories/{cid}/params", "未配置 LLM", True)
+    db = get_session()
+    tax = pipeline.load_taxonomy(db)
+    try:
+        rows = P.suggest_params(tax, cid, call, P._sample_descriptions(db, cid))
+    except Exception as e:  # noqa
+        return back(f"/categories/{cid}/params", f"模型建议失败：{str(e)[:150]}", True)
+    token = secrets.token_hex(6)
+    _SUGGEST_CACHE[token] = json.dumps(rows, ensure_ascii=False)
+    return RedirectResponse(f"/categories/{cid}/params?suggest={token}&mode={'replace' if replace else 'append'}&msg=模型给出 {len(rows)} 个参数，请检查后点保存", status_code=303)
 
 
 @app.get("/library", response_class=HTMLResponse)
-def library(request: Request, q: str = "", kind: str = "symbols", user: str = Depends(auth)):
-    rows, stats = [], {"symbols": 0, "footprints": 0, "instances": 0}
-    if settings.LIBINDEX_PATH.exists():
-        con = sqlite3.connect(str(settings.LIBINDEX_PATH))
-        stats = _lib_stats()
-        like = f"%{q}%"
-        if kind == "symbols":
-            rows = con.execute("select name, lib, pin_count, footprint_field, mpn_field, source, source_kind, license from symbols where name like ? or lib like ? or mpn_field like ? order by name limit 300", (like, like, like)).fetchall()
-        else:
-            rows = con.execute("select name, lib, pad_count, attr, model3d, source, source_kind from footprints where name like ? or lib like ? order by name limit 300", (like, like)).fetchall()
-    return render("library", request, title="符号 / 封装库", nav="library", user=user, rows=rows, q=q, kind=kind, stats=stats)
+def library(request: Request, q: str = "", kind: str = "symbols", has_mpn: str = "", lib: str = "", source_kind: str = "", page: int = 1, size: int = 50, user: str = Depends(auth)):
+    from .kicad import LibIndex
+    idx = LibIndex(settings.LIBINDEX_PATH)
+    total, rows = idx.list_items(kind, q, has_mpn, lib, source_kind, page, size)
+    qs = f"kind={kind}&q={q}&has_mpn={has_mpn}&lib={lib}&source_kind={source_kind}"
+    return render("library", request, title="符号 / 封装库", nav="library", user=user, rows=rows, total=total, page=page, size=size, q=q, kind=kind,
+                  has_mpn=has_mpn, lib=lib, source_kind=source_kind, f=idx.facets(kind), stats=idx.stats(), qs=qs, data_mounted=_data_mounted())
+
+
+@app.get("/library/upload", response_class=HTMLResponse)
+def library_upload_page(request: Request, user: str = Depends(auth)):
+    from .kicad import LibIndex
+    idx = LibIndex(settings.LIBINDEX_PATH)
+    src = idx.con.execute("""select src, sum(s) as s, sum(f) as f, sum(i) as i from (
+        select substr(source, 1, instr(source || '/', '/sources/') + 40) as src, 1 as s, 0 as f, 0 as i from symbols
+        union all select substr(source, 1, instr(source || '/', '/sources/') + 40), 0, 1, 0 from footprints
+        union all select substr(source, 1, instr(source || '/', '/sources/') + 40), 0, 0, 1 from instances) group by src order by s desc""").fetchall()
+    sources = []
+    for r in src:
+        seg = r[0].split("/sources/")[-1].split("/")[0] if "/sources/" in r[0] else r[0]
+        sources.append((seg, r[1], r[2], r[3]))
+    merged: dict = {}
+    for name, a, b, c in sources:
+        m = merged.setdefault(name, [0, 0, 0]); m[0] += a; m[1] += b; m[2] += c
+    return render("libupload", request, title="导入符号 / 封装", nav="library", user=user, sources=[(k, *v) for k, v in merged.items()])
+
+
+@app.post("/library/upload")
+async def library_upload(request: Request, user: str = Depends(auth)):
+    import zipfile
+    form = await request.form()
+    up = form.get("file")
+    label = re.sub(r"[^A-Za-z0-9_.一-龥-]", "-", (form.get("label") or "upload").strip())[:60]
+    kind = form.get("source_kind", "community")
+    lic = (form.get("license") or "").strip()
+    if up is None or not getattr(up, "filename", ""):
+        return back("/library/upload", "请选择文件", True)
+    dest = settings.SOURCES_DIR / "uploads" / label
+    dest.mkdir(parents=True, exist_ok=True)
+    fname = Path(up.filename).name
+    data = await up.read()
+    if fname.lower().endswith(".zip"):
+        tmp = dest / fname
+        tmp.write_bytes(data)
+        with zipfile.ZipFile(tmp) as z:
+            for m in z.infolist():
+                n = m.filename
+                if n.startswith("__MACOSX") or ".." in n or n.startswith("/"):
+                    continue
+                if n.endswith(("/",)):
+                    continue
+                if not n.lower().endswith((".kicad_sym", ".kicad_mod", ".kicad_sch", ".kicad_pcb", ".kicad_pro", ".wrl", ".step", ".stp")):
+                    continue
+                target = dest / n
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(z.read(m))
+        tmp.unlink(missing_ok=True)
+    elif fname.lower().endswith((".kicad_sym", ".kicad_mod", ".kicad_sch", ".kicad_pcb")):
+        sub = dest / ("footprints.pretty" if fname.lower().endswith(".kicad_mod") else "")
+        sub.mkdir(parents=True, exist_ok=True)
+        (sub / fname).write_bytes(data)
+    else:
+        return back("/library/upload", "不支持的文件类型", True)
+    if lic:
+        (dest / "LICENSE").write_text(lic, encoding="utf-8")
+
+    def run(job):
+        from .kicad import LibIndex, scan
+        job.say(f"解析 {dest} …")
+        res = scan(dest, kind)
+        idx = LibIndex(settings.LIBINDEX_PATH)
+        idx.add(res)
+        for e in res["errors"][:10]:
+            job.say(f"  ! {e['file']}: {e['error']}")
+        return {"symbols": len(res["symbols"]), "footprints": len(res["footprints"]), "instances": len(res["instances"]), "errors": len(res["errors"]), "index": idx.stats()}
+    try:
+        manager.start("scan-upload", run, {"label": label, "file": fname, "kind": kind})
+    except RuntimeError as e:
+        return back("/library/upload", str(e), True)
+    return back("/jobs", f"已上传 {fname}，正在解析入库")
+
+
+@app.get("/library/{kind}/{rowid}", response_class=HTMLResponse)
+def library_item(request: Request, kind: str, rowid: int, user: str = Depends(auth)):
+    from .kicad import LibIndex
+    if kind not in ("symbols", "footprints"):
+        raise HTTPException(404)
+    idx = LibIndex(settings.LIBINDEX_PATH)
+    d = idx.get_item(kind, rowid)
+    if not d:
+        raise HTTPException(404)
+    return render("libitem", request, title=f"{'符号' if kind=='symbols' else '封装'} · {d['name']}", nav="library", user=user, kind=kind, d=d, mpns=idx.mpns(kind, rowid))
+
+
+@app.post("/library/{kind}/{rowid}/mpn/{op}")
+async def library_mpn(request: Request, kind: str, rowid: int, op: str, user: str = Depends(auth)):
+    from .kicad import LibIndex
+    f = await request.form()
+    idx = LibIndex(settings.LIBINDEX_PATH)
+    if op == "add":
+        n = 0
+        for m in re.split(r"[,，;；\n]+", f.get("mpn") or ""):
+            if m.strip():
+                idx.add_mpn(kind, rowid, m.strip(), (f.get("manufacturer") or "").strip(), "manual"); n += 1
+        return back(f"/library/{kind}/{rowid}", f"已添加 {n} 个 MPN")
+    if op == "del":
+        idx.del_mpn(kind, rowid, f.get("mpn") or "")
+        return back(f"/library/{kind}/{rowid}", "已删除")
+    raise HTTPException(400)
 
 
 # ---- 回写
@@ -591,7 +867,7 @@ def settings_page(request: Request, user: str = Depends(auth)):
     url = settings.db_url()
     dbinfo = "SQLite：" + url.split("///")[-1] if url.startswith("sqlite") else "PostgreSQL：" + re.sub(r"//.*@", "//***@", url)
     return render("settings", request, title="设置", nav="settings", user=user, cfg=settings.get_all(), env={k: bool(os.environ.get(v)) for k, v in settings.ENV_MAP.items()},
-                  test=request.query_params.get("test", ""), dbinfo=dbinfo, data_dir=str(settings.DATA_DIR), auth_on=bool(os.environ.get("ADMIN_PASSWORD") or os.environ.get("EZPLM_WEB_PASSWORD")))
+                  test=request.query_params.get("test", ""), dbinfo=dbinfo, data_dir=str(settings.DATA_DIR), data_mounted=_data_mounted(), auth_on=bool(os.environ.get("ADMIN_PASSWORD") or os.environ.get("EZPLM_WEB_PASSWORD")))
 
 
 @app.post("/settings")

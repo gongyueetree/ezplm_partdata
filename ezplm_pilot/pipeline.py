@@ -84,6 +84,13 @@ def ingest(source, batch: int = 500, max_batches: int | None = None, job: str | 
     for n in tax.nodes.values():
         db.merge(StagedCategory(id=n.id, parent=n.parent or None, depth=n.depth, name=n.name))
     db.commit()
+    try:                                       # 新分类自动挂上内置关键参数建议
+        from .params import seed_load
+        st = seed_load(db, load_taxonomy(db))
+        if st["seeded"]:
+            log(f"已为 {st['seeded']} 个分类挂上内置关键参数建议")
+    except Exception as e:  # noqa
+        log(f"内置参数挂载跳过：{str(e)[:100]}")
     if reset:
         _set_state(db, "ingest:page", "1"); db.commit()
 
@@ -158,11 +165,11 @@ def _trusted_sample(db, per_category: int = 300) -> list[Part]:
 
 def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = False, do_urls: bool = False,
             job: str | None = None, libindex: str | Path | None = None, llm_call=None, stop=None, log=None, progress=None,
-            auto_fill_min: float = 0.85, flag_min: float = 0.85) -> dict:
+            auto_fill_min: float = 0.85, flag_min: float = 0.85, fetch_details: bool = True) -> dict:
     from .classify import Classifier, Policy
     from .packages import PackageMapper
     from .urls import UrlFiller
-    from .kicad import LibIndex, propose_symbols
+    from .kicad import LibIndex, propose_symbols, propose_footprints_by_mpn
 
     from .settings import LIBINDEX_PATH, apply_env
     apply_env()                      # 把设置里的 LLM 提供商/密钥放进环境变量
@@ -191,22 +198,54 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
         parts = [_to_part(r) for r in rows]
         by_id = {r.id: r for r in rows}
         attrs = {}
+        need_detail = [r for r in rows if not (r.new_footprint or r.orig_footprint) and (r.attributes_json or "{}") in ("{}", "")]
+        if need_detail and fetch_details:
+            try:
+                from .settings import api_source
+                api = api_source()
+                from concurrent.futures import ThreadPoolExecutor
+                def grab(r):
+                    try:
+                        d = api.get_part_detail(r.id)
+                        return r.id, d.get("attributes") or {}, d.get("notes") or ""
+                    except Exception as e:  # noqa
+                        return r.id, None, str(e)[:100]
+                with ThreadPoolExecutor(6) as ex:
+                    for pid, a, notes in ex.map(grab, need_detail):
+                        if a is not None:
+                            by_id[pid].attributes_json = json.dumps(a, ensure_ascii=False)
+                            if notes and not by_id[pid].notes:
+                                by_id[pid].notes = notes
+                log(f"  拉取物料属性 {len(need_detail)} 条")
+            except Exception as e:  # noqa
+                log(f"  ! 拉取物料属性失败：{str(e)[:120]}")
         for r in rows:
             try:
                 a = json.loads(r.attributes_json or "{}")
-                attrs[r.id] = a.get("封装") or a.get("Package") or a.get("package") or ""
+                if isinstance(a, list):          # 属性可能是 [{name, value}] 列表
+                    a = {x.get("name") or x.get("key") or "": x.get("value") for x in a if isinstance(x, dict)}
+                attrs[r.id] = next((v for k, v in a.items() if k and ("封装" in k or k.lower() in ("package", "package / case", "封装/外壳"))), "") or ""
             except Exception:
                 pass
         props: list[Proposal] = []
-        for name, fn in (("分类", lambda: [clf.classify(p) for p in parts]), ("封装", lambda: list(pkg.propose(parts, attrs))),
+        for name, fn in (("分类", lambda: [clf.classify(p) for p in parts]), ("封装(MPN映射)", lambda: list(propose_footprints_by_mpn(parts, idx)) if idx else []),
+                         ("封装", lambda: list(pkg.propose(parts, attrs))),
                          ("符号", lambda: list(propose_symbols(parts, idx)) if idx else []), ("链接", lambda: list(urlf.propose(parts)) if urlf else [])):
             try:
                 props += fn()
             except Exception as e:  # noqa  —— 单个模块出错不影响本批其它模块
                 log(f"  ! {name}模块出错，本批跳过该模块：{str(e)[:200]}")
+        by_field: dict = {}
+        # 重跑时作废上一轮同物料、同字段的待复核建议，避免重复
+        old = db.execute(select(StagedProposal).where(StagedProposal.part_id.in_(list(by_id)), StagedProposal.review_status == "pending")).scalars().all()
+        for o in old:
+            o.review_status = "rejected"; o.review_note = "superseded by reprocess"
         for pr in props:
-            if pr.action == "ok":
+            if pr.action in ("ok", "skip"):
+                if pr.action == "skip":
+                    _add_tags(by_id[pr.part_id], pr.tags)
                 continue
+            by_field[pr.field] = by_field.get(pr.field, 0) + 1
             sp = by_id[pr.part_id]
             rec = StagedProposal(part_id=pr.part_id, mpn=pr.mpn, field=pr.field, current=pr.current, proposed=pr.proposed,
                                  proposed_label=pr.proposed_label, confidence=pr.confidence, action=pr.action, method=pr.method,
@@ -225,13 +264,17 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
         db.add(JobLog(job=job, stage="process", batch_no=stats["batches"], n_items=len(rows), finished_at=datetime.utcnow(),
                       detail=json.dumps({k: v for k, v in stats.items() if k != "job"})))
         db.commit()
-        log(f"批次 {stats['batches']}: {len(rows)} 条 → 建议 {stats['proposals']}（自动 {stats['auto_fill']} / 疑似错误 {stats['flag_mismatch']} / 复核 {stats['review']}）")
+        log(f"批次 {stats['batches']}: {len(rows)} 条 → 建议 {stats['proposals']}（自动 {stats['auto_fill']} / 疑似错误 {stats['flag_mismatch']} / 复核 {stats['review']}）本批按字段 {by_field}"
+            + (f"；LLM 累计 {clf.llm.n_calls} 次/失败 {clf.llm.n_errors}" if clf.llm else ""))
         if progress:
             progress({"done": stats["parts"], "total": todo_total})
         if (max_batches and stats["batches"] >= max_batches) or (stop and stop()):
             break
     if clf.llm:
         stats["llm_calls"] = clf.llm.n_calls
+        stats["llm_errors"] = clf.llm.n_errors
+        if clf.llm.n_errors:
+            log(f"  ! LLM 调用失败 {clf.llm.n_errors}/{clf.llm.n_calls} 次，最后一次错误：{clf.llm.last_error}")
     return stats
 
 

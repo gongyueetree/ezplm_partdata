@@ -163,6 +163,10 @@ class ApiSource:
         data = js.get("data", js)
         return {"ok": True, "total": data.get("total"), "sample": (data.get("data") or data.get("items") or [None])[0]}
 
+    def get_part_detail(self, part_id: str) -> dict:
+        """原始详情（含 attributes / notes / pdf）。"""
+        return self._get(f"/partlibs/{part_id}").get("data", {})
+
     def get_part(self, part_id: str) -> dict:
         """读取单条当前值，返回与回写 set 同名的键：categoryId/symbol/footprint/url/datasheetUrl。"""
         d = self._get(f"/partlibs/{part_id}").get("data", {})

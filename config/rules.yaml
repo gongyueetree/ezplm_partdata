@@ -5,7 +5,7 @@
 # 规则按顺序匹配，先命中者优先；conf 为该规则的置信度。
 keyword:
   - {pattern: "动态随机存取存储器|DRAM|SDRAM|DDR[2-5]?|LPDDR", exclude: "缓冲器|驱动器|控制器|寄存器|时钟|Buffer|Controller|Register", category: "存储器 > 存储器", conf: 0.95}
-  - {pattern: "NAND\\s*Flash|NOR\\s*Flash|EEPROM|SRAM|PSRAM|OctalRAM|FRAM|MRAM|随机存取存储器|闪存存储器", category: "存储器 > 存储器", conf: 0.92}
+  - {pattern: "NAND\\s*Flash|NOR\\s*Flash|EEPROM|SRAM|PSRAM|OctalRAM|FRAM|MRAM|随机存取存储器|闪存存储器", exclude: "微控制器|单片机|MCU|Microcontroller|微处理器|Processor|FPGA|CPLD|Cortex|RISC-V|DSP|SoC|模组|模块|Module|开发板", category: "存储器 > 存储器", conf: 0.92}
   - {pattern: "数字隔离器", category: "数字隔离器", conf: 0.95}
   - {pattern: "光耦|光隔离器|光电耦合", category: "光隔离器", conf: 0.85}
   - {pattern: "微控制器|\\bMCU\\b|Cortex-M|RISC-V 内核", category: "微控制器（MCU）", conf: 0.9}

@@ -90,6 +90,24 @@ class StagedCategory(Base):
     name = Column(String(200))
 
 
+class CategoryParam(Base):
+    """分类的关键参数（选型时要问的参数及常见取值范围）。"""
+    __tablename__ = "category_params"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category_id = Column(String(40), index=True)
+    name = Column(String(120))          # 参数显示名，如 Gain Bandwidth Product
+    key = Column(String(80))            # 机器键，如 gbw
+    ptype = Column(String(20))          # range / enum / bool / text
+    unit = Column(String(30))
+    vmin = Column(String(40))
+    vmax = Column(String(40))
+    values = Column(String(500))        # enum 的常见取值，逗号分隔
+    priority = Column(String(20))       # decisive / important / reference
+    source = Column(String(20))         # model / manual
+    sort = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class SyncState(Base):
     __tablename__ = "sync_state"
     key = Column(String(60), primary_key=True)         # ingest:cursor / ingest:page / process:last_id ...

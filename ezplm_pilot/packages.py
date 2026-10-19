@@ -52,7 +52,7 @@ class PackageMapper:
                 continue
             kicad, conf = hit
             if src == "description":
-                conf = round(conf * 0.85, 3)
+                conf = round(conf * 0.95, 3)      # 描述里明确写出的封装名可信度较高（已按一级分类门控）
             action = "auto_fill" if conf >= 0.85 else "review"
             yield Proposal(p.id, p.mpn, "footprint", "", kicad.split(":")[-1], kicad, conf, action, f"package-map:{src}",
                            {"package_text": pkg}, ["封装自动映射"] if action == "auto_fill" else ["封装待复核"])
