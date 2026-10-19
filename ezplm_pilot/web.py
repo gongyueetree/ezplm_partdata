@@ -23,10 +23,39 @@ from sqlalchemy import func, or_, select
 
 from . import pipeline, settings
 from .jobs import manager
-from .staging import CategoryParam, StagedCategory, StagedPart, StagedProposal, get_session
+from .staging import CategoryParam, StagedCategory, StagedPart, StagedProposal
+from .staging import get_session as _new_session
+import contextvars
+
+_REQ_DB: contextvars.ContextVar = contextvars.ContextVar("req_db", default=None)
+
+
+def get_session():
+    """请求级会话：同一请求内复用，请求结束由中间件统一关闭（否则 Postgres 连接池会被耗尽）。"""
+    holder = _REQ_DB.get()
+    if holder is None:                      # 非请求上下文（启动钩子、后台线程）
+        return _new_session()
+    if not holder:
+        holder.append(_new_session())
+    return holder[0]
 
 app = FastAPI(title="ezPLM 暂存数据平台")
 security = HTTPBasic(auto_error=False)
+
+
+@app.middleware("http")
+async def _db_session_scope(request: Request, call_next):
+    holder: list = []
+    token = _REQ_DB.set(holder)
+    try:
+        return await call_next(request)
+    finally:
+        _REQ_DB.reset(token)
+        for db in holder:
+            try:
+                db.close()
+            except Exception:  # noqa
+                pass
 
 
 @app.exception_handler(Exception)
@@ -643,7 +672,9 @@ def _seed_on_startup():
     """启动时自动给没有参数的叶子分类挂上内置建议（分类树尚未拉取时静默跳过）。"""
     try:
         from . import params as P
-        st = P.seed_load(get_session())
+        db = _new_session()
+        st = P.seed_load(db)
+        db.close()
         if st["seeded"]:
             print(f"[params] 内置参数建议已挂到 {st['seeded']} 个分类")
     except Exception as e:  # noqa

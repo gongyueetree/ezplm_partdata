@@ -92,6 +92,7 @@ def bulk_generate(llm_call, only_missing: bool = True, leaves_only: bool = True,
             log(f"[{i+1}/{len(todo)}] {tax.path(n.id)} 失败：{str(e)[:120]}")
         if progress:
             progress({"done": i + 1, "total": len(todo)})
+    db.close()
     return stats
 
 

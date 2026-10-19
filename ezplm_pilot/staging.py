@@ -136,7 +136,7 @@ def get_engine(url: str | None = None):
         url = db_url()
     if url in _ENGINES:
         return _ENGINES[url]
-    kw = {"connect_args": {"check_same_thread": False, "timeout": 30}} if url.startswith("sqlite") else {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10}
+    kw = {"connect_args": {"check_same_thread": False, "timeout": 30}} if url.startswith("sqlite") else {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10, "pool_timeout": 30, "pool_recycle": 1800}
     eng = create_engine(url, **kw)
     Base.metadata.create_all(eng)
     _migrate(eng)

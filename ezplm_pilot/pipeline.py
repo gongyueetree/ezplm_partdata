@@ -148,8 +148,10 @@ def ingest(source, batch: int = 500, max_batches: int | None = None, job: str | 
             if (max_batches and batch_no >= max_batches) or (stop and stop()):
                 break
     flush()
-    return {"job": job, "fetched": n_total, "new": n_new, "orig_changed": n_changed, "batches": batch_no,
-            "parts_in_staging": db.execute(select(func.count(StagedPart.id))).scalar()}
+    out = {"job": job, "fetched": n_total, "new": n_new, "orig_changed": n_changed, "batches": batch_no,
+           "parts_in_staging": db.execute(select(func.count(StagedPart.id))).scalar()}
+    db.close()
+    return out
 
 
 # --------------------------------------------------------------------------- process
@@ -275,6 +277,7 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
         stats["llm_errors"] = clf.llm.n_errors
         if clf.llm.n_errors:
             log(f"  ! LLM 调用失败 {clf.llm.n_errors}/{clf.llm.n_calls} 次，最后一次错误：{clf.llm.last_error}")
+    db.close()
     return stats
 
 
@@ -299,6 +302,7 @@ def review(proposal_id: int, decision: str, user: str = "admin", note: str = "")
         if pr.field == "category_id":
             sp.new_category = None
     db.commit()
+    db.close()
     return pr
 
 
@@ -363,6 +367,7 @@ def export(out_path: str | Path | None = None, apply: bool = False, api=None, ba
                 break
     db.add(JobLog(job=job, stage="export", batch_no=0, n_items=len(updates), finished_at=datetime.utcnow(), detail=json.dumps({"applied": applied, "held_pending_review": held, "dropped_nonempty": dropped})))
     db.commit()
+    db.close()
     return {"job": job, "ready": len(updates), "held_pending_review": held, "applied": applied, "skipped_fields_already_filled": dropped, "file": str(out_path)}
 
 
