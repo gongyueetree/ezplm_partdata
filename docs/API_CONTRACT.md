@@ -46,7 +46,8 @@ GET /footprints?name=<exact>&page...   → [{id, name, category, has3d, hasPdf}]
 PATCH /parts/batch
 {"updates": [
   {"id": "<part id>",
-   "set": {"categoryId": "...", "symbolId": "...", "footprintId": "...", "url": "...", "datasheetUrl": "..."},
+   "set": {"categoryId": "...", "symbolId": "...", "footprintId": "...", "url": "...", "datasheetUrl": "...",
+           "descriptionEn": "...", "manufacturer": "..."},       ← 后两个来自 IHS 参考数据；manufacturer 只在 ezPLM 为空时填
    "tags": ["自动分类"],                      ← 追加标签，不覆盖已有标签
    "provenance": {"method": "knn+rule", "confidence": 0.93, "evidence": {...}, "job": "2026-10-18-classify"}}
 ]}

@@ -172,6 +172,13 @@ JOBS = """{% extends "base" %}{% block body %}
 <p><button class=pri {{ 'disabled' if busy }}>克隆并扫描</button> <span class=mute>索引：符号 {{ lib.symbols }} / 封装 {{ lib.footprints }}</span></p></form>
 <div class=mute>已下载的来源：{{ sources|join('、') or '无' }}</div></div>
 
+<div class=panel><h2>IHS 参考数据</h2>
+<p class=mute>IHS 参数库（2012 年快照）里与暂存物料同型号的记录：{{ ihs_n }} 条；已匹配物料 {{ s.ihs_matched }} 条。原始数据约 7000 万条，不放服务器：在本地运行
+<code>python -m ezplm_pilot.cli ihs-load --dir &lt;IHS数据目录&gt;</code>（<code>DATABASE_URL</code> 指向本平台的 Postgres），ezPLM 陆续拉取后再运行一次即可。处理（②）会自动带上 IHS 建议；已处理过的物料用下面的按钮补跑。</p>
+<form class=frm method=post action="/jobs/start"><input type=hidden name=kind value=ihs>
+<label><input type=checkbox name=all value=1> 也检查 IHS 无记录的物料的厂商名（提示已被并购的旧厂商名）</label>
+<p><button class=pri {{ 'disabled' if busy or not ihs_n }}>补跑 IHS 匹配</button></p></form></div>
+
 <div class=panel><h2>④ 回写 ezPLM（export）</h2>
 <form class=frm method=post action="/jobs/start"><input type=hidden name=kind value=export>
 <p><button {{ 'disabled' if busy }}>生成回写包（不写 ezPLM）</button> <a class=btn href="/export">查看 / 下载 / 正式回写 →</a></p></form></div>
@@ -215,7 +222,8 @@ PARTS = """{% extends "base" %}{% block body %}
 PART = """{% extends "base" %}{% block topright %}<span class=mute>{{ p.manufacturer }} · {{ p.id }}</span>{% endblock %}{% block body %}
 <div class=grid2>
 <div class=panel><h2>字段（原值 → 新值）</h2><table class=kv>
-<tr><td>描述</td><td>{{ p.description }}<br><span class=mute>{{ p.description_en }}</span></td></tr>
+<tr><td>描述</td><td>{{ p.description }}<br><span class=mute>{{ p.description_en }}</span>{% if p.new_description_en %}<br>→ <span class=diff>{{ p.new_description_en }}</span>{% endif %}</td></tr>
+<tr><td>制造商</td><td>{{ p.manufacturer or '空' }}{% if p.new_manufacturer %} → <span class=diff>{{ p.new_manufacturer }}</span>{% endif %}{% if ihs.mine and ihs.mine.conf %}<br><span class=mute>现属 {{ ihs.mine.current }}（谱系 {{ ihs.mine.conf }}：{{ ihs.mine.note }}）</span>{% endif %}</td></tr>
 <tr><td>分类</td><td>{{ tax.path(p.orig_category_id) if p.orig_category_id in tax.nodes else (p.orig_category or '空') }}{% if p.new_category_id %}<br>→ <span class=diff>{{ tax.path(p.new_category_id) }}</span>{% endif %}</td></tr>
 <tr><td>符号</td><td>{{ p.orig_symbol or '空' }} {{ ('→ <span class=diff>'+p.new_symbol+'</span>')|safe if p.new_symbol }}</td></tr>
 <tr><td>封装</td><td>{{ p.orig_footprint or '空' }} {{ ('→ <span class=diff>'+p.new_footprint+'</span>')|safe if p.new_footprint }}</td></tr>
@@ -230,8 +238,21 @@ PART = """{% extends "base" %}{% block topright %}<span class=mute>{{ p.manufact
 <datalist id=cats>{% for cid, path in leaves %}<option value="{{ path }}">{% endfor %}</datalist>
 <div class=row><div><label>符号（KiCad 名）</label><input name=new_symbol value="{{ p.new_symbol or '' }}"></div><div><label>封装（KiCad 名）</label><input name=new_footprint value="{{ p.new_footprint or '' }}"></div></div>
 <div class=row><div><label>官网链接</label><input name=new_url value="{{ p.new_url or '' }}"></div><div><label>数据手册 URL</label><input name=new_datasheet value="{{ p.new_datasheet or '' }}"></div></div>
+<div class=row><div><label>英文描述</label><input name=new_description_en value="{{ p.new_description_en or '' }}"></div><div><label>制造商（只填空，不覆盖 ezPLM 已有值）</label><input name=new_manufacturer value="{{ p.new_manufacturer or '' }}"></div></div>
 <label>标签（逗号分隔）</label><input name=tags value="{{ p.tags or '' }}" style="width:100%">
 <p><button class=pri>保存</button> <button name=reprocess value=1>保存并标记为待重新处理</button></p></form></div></div>
+<div class=panel><h2>IHS 参考 <span class=mute style="font-weight:400">2011-12 ~ 2012-02 快照 · 同型号 {{ ihs.total or 0 }} 条</span></h2>
+{% if ihs.rows %}<div style="overflow-x:auto"><table><tr><th>匹配</th><th>置信度</th><th>IHS 型号</th><th>IHS 厂商 → 当前归属</th><th>IHS 分类</th><th>描述</th><th>封装</th><th>状态（2012）</th><th>参数</th></tr>
+{% for x in ihs.rows %}<tr class="{{ 'new' if x.r.objid == p.ihs_objid }}">
+<td style="white-space:nowrap">{{ x.level }}</td><td>{{ '%.2f'|format(x.conf) }}</td>
+<td>{{ x.r.mpn }}{% if x.r.generic %}<br><span class=mute>通用号 {{ x.r.generic }}</span>{% endif %}</td>
+<td>{{ x.r.mfr_ihs }}{% if x.r.lineage_conf %}<br>→ <b>{{ x.r.mfr_current }}</b> <span class=tag>谱系 {{ x.r.lineage_conf }}</span>{% endif %}</td>
+<td>{{ x.r.family }}<br><span class=mute>{{ x.r.part_category }}</span></td><td style="max-width:280px">{{ x.r.description }}</td>
+<td class=mute>{{ x.r.package }}</td><td>{{ x.r.status }}</td>
+<td><details><summary class=mute>{{ x.params|length }} 项</summary><table class=kv>{% for k, v in x.params.items() %}<tr><td>{{ k }}</td><td>{{ v }}</td></tr>{% endfor %}</table>
+{% if x.r.datasheet %}<a href="{{ x.r.datasheet }}" target=_blank rel=noopener>IHS 数据手册链接（多已失效）</a>{% endif %}</details></td></tr>{% endfor %}</table></div>
+<p class=mute>绿色行是本物料的最佳匹配，IHS 建议依据它生成。L5（同号异厂）只作参考，不出建议。状态和数据手册链接是 2012 年的数据。{% if ihs.total > ihs.rows|length %}只显示前 {{ ihs.rows|length }} 条。{% endif %}</p>
+{% else %}<p class=mute>IHS 中没有同型号记录。{% if not ihs_n %}暂存库里还没有 IHS 参考数据：在本地运行 <code>python -m ezplm_pilot.cli ihs-load --dir &lt;IHS数据目录&gt;</code>。{% endif %}</p>{% endif %}</div>
 <div class=panel><h2>建议与复核</h2>
 <table><tr><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>状态</th><th>操作</th><th>证据</th></tr>
 {% for r in props %}<tr class="{{ 'new' if r.review_status in ('auto','approved') }}">
@@ -246,7 +267,7 @@ PART = """{% extends "base" %}{% block topright %}<span class=mute>{{ p.manufact
 
 REVIEW = """{% extends "base" %}{% block body %}
 <form class=filters method=get>
-<select name=field><option value="">— 字段 —</option>{% for v in ['category_id','symbol','footprint','url','datasheet'] %}<option {{ 'selected' if field==v }}>{{ v }}</option>{% endfor %}</select>
+<select name=field><option value="">— 字段 —</option>{% for v in ['category_id','symbol','footprint','url','datasheet','description_en','manufacturer'] %}<option {{ 'selected' if field==v }}>{{ v }}</option>{% endfor %}</select>
 <select name=action><option value="">— 动作 —</option>{% for v in ['flag_mismatch','review'] %}<option {{ 'selected' if action==v }}>{{ v }}</option>{% endfor %}</select>
 <select name=status><option value=pending {{ 'selected' if status=='pending' }}>待复核</option><option value=auto {{ 'selected' if status=='auto' }}>自动写入（抽检）</option><option value=approved {{ 'selected' if status=='approved' }}>已通过</option><option value=rejected {{ 'selected' if status=='rejected' }}>已驳回</option></select>
 <input name=minconf value="{{ minconf }}" placeholder="最低置信度" style="width:110px"><button class=pri>筛选</button><span class=mute>共 {{ total }} 条</span>
@@ -422,7 +443,8 @@ def _lib_stats():
 def jobs_page(request: Request, user: str = Depends(auth)):
     job = manager.current.to_dict() if manager.current else None
     sources = sorted(p.name for p in settings.SOURCES_DIR.iterdir() if p.is_dir()) if settings.SOURCES_DIR.exists() else []
-    return render("jobs", request, title="任务控制", nav="jobs", user=user, s=pipeline.summary(), cfg=settings.get_all(), job=job,
+    from .ihs import IhsMatcher
+    return render("jobs", request, title="任务控制", nav="jobs", user=user, s=pipeline.summary(), cfg=settings.get_all(), job=job, ihs_n=IhsMatcher.n_ref(get_session()),
                   history=[h.to_dict() for h in manager.history], lib=_lib_stats(), sources=sources,
                   status_zh={"queued": "排队中", "running": "运行中", "done": "已完成", "failed": "失败", "stopped": "已停止"})
 
@@ -464,6 +486,12 @@ def _run_scan(job, path, source_kind):
     return {"symbols": len(res["symbols"]), "footprints": len(res["footprints"]), "instances": len(res["instances"]), "errors": len(res["errors"]), "index": idx.stats()}
 
 
+def _run_ihs(job, all_parts):
+    cfg = settings.get_all()
+    return pipeline.ihs_match(only_matched=not all_parts, job=job.id, stop=job.should_stop, log=job.say,
+                              progress=lambda p: job.progress.update(p), auto_fill_min=float(cfg["auto_fill_min"]))
+
+
 def _run_export(job, apply):
     api = settings.api_source() if apply else None
     return pipeline.export(apply=apply, api=api, job=job.id, stop=job.should_stop, log=job.say, progress=lambda p: job.progress.update(p))
@@ -485,6 +513,8 @@ async def jobs_start(request: Request, user: str = Depends(auth)):
             if not f.get("path"):
                 return back("/jobs", "请填写仓库地址或目录", True)
             manager.start("scan", lambda j: _run_scan(j, f["path"].strip(), f.get("source_kind", "community")), {"path": f["path"], "kind": f.get("source_kind")})
+        elif kind == "ihs":
+            manager.start("ihs", lambda j: _run_ihs(j, bool(f.get("all"))), {"all": bool(f.get("all"))})
         elif kind == "export":
             manager.start("export", lambda j: _run_export(j, False), {"apply": False})
         elif kind == "params":
@@ -532,7 +562,7 @@ def parts(request: Request, q: str = "", missing: str = "", changed: str = "", p
         stmt = stmt.where(or_(col == "", col.is_(None)))
     elif missing == "pdf":
         stmt = stmt.where(StagedPart.orig_has_pdf.is_(False))
-    anynew = or_(StagedPart.new_category_id.isnot(None), StagedPart.new_symbol.isnot(None), StagedPart.new_footprint.isnot(None), StagedPart.new_url.isnot(None), StagedPart.new_datasheet.isnot(None))
+    anynew = or_(*[getattr(StagedPart, col).isnot(None) for _, col in pipeline.EXPORT_FIELDS])
     if changed == "1":
         stmt = stmt.where(anynew)
     elif changed == "0":
@@ -562,7 +592,9 @@ def part(request: Request, pid: str, user: str = Depends(auth)):
         raise HTTPException(404)
     props = db.execute(select(StagedProposal).where(StagedProposal.part_id == pid).order_by(StagedProposal.field, StagedProposal.confidence.desc())).scalars().all()
     tax = pipeline.load_taxonomy(db)
-    return render("part", request, title=p.mpn, nav="parts", user=user, p=p, props=props, tax=tax, leaves=tax.leaf_labels())
+    from .ihs import IhsMatcher, reference_rows
+    return render("part", request, title=p.mpn, nav="parts", user=user, p=p, props=props, tax=tax, leaves=tax.leaf_labels(),
+                  ihs=reference_rows(db, p, tax), ihs_n=IhsMatcher.n_ref(db))
 
 
 @app.post("/parts/{pid}/edit")
@@ -581,7 +613,7 @@ async def part_edit(request: Request, pid: str, user: str = Depends(auth)):
         if not hit:
             return back(f"/parts/{pid}", "分类未找到，请从下拉列表中选择", True)
         p.new_category_id, p.new_category = hit[0], tax.nodes[hit[0]].name
-    for k in ("new_symbol", "new_footprint", "new_url", "new_datasheet"):
+    for k in ("new_symbol", "new_footprint", "new_url", "new_datasheet", "new_description_en", "new_manufacturer"):
         v = (f.get(k) or "").strip()
         setattr(p, k, v or None)
     p.tags = ",".join(t.strip() for t in (f.get("tags") or "").replace("，", ",").split(",") if t.strip())
@@ -863,7 +895,7 @@ async def library_mpn(request: Request, kind: str, rowid: int, op: str, user: st
 def _export_ctx():
     db = get_session()
     s = pipeline.summary()
-    anynew = or_(StagedPart.new_category_id.isnot(None), StagedPart.new_symbol.isnot(None), StagedPart.new_footprint.isnot(None), StagedPart.new_url.isnot(None), StagedPart.new_datasheet.isnot(None))
+    anynew = or_(*[getattr(StagedPart, col).isnot(None) for _, col in pipeline.EXPORT_FIELDS])
     pending = {r[0] for r in db.execute(select(StagedProposal.part_id).where(StagedProposal.review_status == "pending")).all()}
     cands = [r[0] for r in db.execute(select(StagedPart.id).where(anynew, StagedPart.exported_at.is_(None))).all()]
     held = sum(1 for c in cands if c in pending)

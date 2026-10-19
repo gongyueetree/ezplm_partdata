@@ -1,0 +1,263 @@
+# 厂商谱系：规范厂商名 + 并购/更名关系。供 IHS 参考数据匹配（ezplm_pilot/ihs.py）使用，也可给 URL 模板等模块复用。
+#
+# canonical：规范厂商。match 是正则（忽略大小写），对任意写法的厂商名（ezPLM 中文/全称、IHS 大写名）做 search，
+#            按顺序取第一条命中，所以更具体的写在前面。没有命中的厂商名按"去掉 INC/CORP/LTD/有限公司 等后缀"规范化后比较。
+# lineage  ：被收购/更名的厂商 → 当前归属（to，会再经 canonical 规范化）。
+#   from   IHS 里的厂商名（按规范化后精确比较）；match 可选，正则，用于匹配 ezPLM 里的其它写法（如 "Maxim Integrated"）
+#   conf   A=整体并购/更名，直接映射；B=业务被拆分，按 rules 里的 IHS 大类映射，未命中用 to；C=需人工确认
+#   rules  [{families: IHS 大类正则（ANALOG_IC_AMP/MEMORY_IC/DIODE…，ezPLM 物料按一级分类推断）, to: 当前归属}]
+# 来源：IHS 2011-12~2012-02 数据中出现的 177 个厂商名（IHS数据/整合方案/厂商并购映射表.csv），关系按 2026 年已知信息整理，B/C 级需人工确认。
+
+canonical:
+  - {name: "Texas Instruments", match: "texas instruments|德州仪器|^ti$"}
+  - {name: "Analog Devices", match: "analog devices|亚德诺|^adi$"}
+  - {name: "Microchip Technology", match: "^microchip|微芯"}
+  - {name: "Renesas Electronics", match: "renesas|瑞萨"}
+  - {name: "onsemi", match: "^onsemi|^on semiconductor|安森美"}
+  - {name: "Infineon Technologies", match: "infineon|英飞凌"}
+  - {name: "NXP Semiconductors", match: "^nxp|恩智浦"}
+  - {name: "STMicroelectronics", match: "stmicro|意法半导体"}
+  - {name: "Broadcom", match: "broadcom|博通"}
+  - {name: "Micron Technology", match: "^micron( technology)?\\b|美光"}
+  - {name: "SK hynix", match: "hynix|海力士"}
+  - {name: "Samsung Electro-Mechanics", match: "samsung electro|三星电机"}
+  - {name: "Samsung Semiconductor", match: "samsung|三星"}
+  - {name: "Kioxia", match: "kioxia|铠侠"}
+  - {name: "Toshiba", match: "toshiba|东芝"}
+  - {name: "ROHM", match: "\\brohm\\b|罗姆"}
+  - {name: "Vishay", match: "vishay|威世"}
+  - {name: "Diodes Inc", match: "^diodes\\b|美台"}
+  - {name: "Nexperia", match: "nexperia|安世"}
+  - {name: "Torex Semiconductor", match: "torex|特瑞仕"}
+  - {name: "ISSI", match: "integrated silicon solution|^issi\\b"}
+  - {name: "MaxLinear", match: "maxlinear"}
+  - {name: "Littelfuse", match: "littelfuse|力特"}
+  - {name: "Qorvo", match: "qorvo"}
+  - {name: "Skyworks Solutions", match: "skyworks|思佳讯"}
+  - {name: "MACOM", match: "^macom|^m/a-com"}
+  - {name: "Synaptics", match: "synaptics"}
+  - {name: "Marvell", match: "marvell|美满"}
+  - {name: "Coherent", match: "^coherent|^ii-vi"}
+  - {name: "ams OSRAM", match: "ams[- ]?osram|^ams\\b|艾迈斯"}
+  - {name: "ABLIC", match: "^ablic|艾普凌科"}
+  - {name: "Nisshinbo Micro Devices", match: "nisshinbo|日清纺"}
+  - {name: "Lattice Semiconductor", match: "^lattice|莱迪思"}
+  - {name: "AMD", match: "^amd\\b|^advanced micro devices|超威"}
+  - {name: "Intel", match: "^intel\\b|英特尔"}
+  - {name: "Altera", match: "^altera|阿尔特拉"}
+  - {name: "TDK", match: "^tdk\\b|东电化"}
+  - {name: "Murata", match: "murata|村田"}
+  - {name: "Panasonic", match: "panasonic|松下"}
+  - {name: "KYOCERA AVX", match: "\\bavx\\b"}
+  - {name: "KYOCERA", match: "kyocera|京瓷"}
+  - {name: "YAGEO", match: "yageo|国巨|kemet|基美"}
+  - {name: "Knowles", match: "^knowles|楼氏"}
+  - {name: "TT Electronics", match: "^tt electronics"}
+  - {name: "Amphenol", match: "amphenol|安费诺"}
+  - {name: "TE Connectivity", match: "te connectivity|^tyco electronics|泰科电子"}
+  - {name: "Molex", match: "^molex|莫仕"}
+  - {name: "Bel Fuse", match: "^bel fuse|^bel power"}
+  - {name: "Teledyne e2v", match: "teledyne e2v"}
+  - {name: "Frontgrade Technologies", match: "frontgrade"}
+  - {name: "Western Digital", match: "western digital|西部数据"}
+  - {name: "Seiko Epson", match: "seiko epson|^epson|爱普生"}
+
+lineage:
+  # —— 常见旧名在 ezPLM 里的写法（IHS 里另有精确条目，这里只补 match）——
+  - {from: "MAXIM INTEGRATED PRODUCTS INC", match: "^maxim\\b|美信", to: "Analog Devices", conf: A, note: "2021 ADI收购"}
+  - {from: "LINEAR TECHNOLOGY CORP", match: "linear tech|凌力尔特", to: "Analog Devices", conf: A, note: "2017 ADI收购"}
+  - {from: "ATMEL CORP", match: "^atmel\\b(?! grenoble)|爱特梅尔", to: "Microchip Technology", conf: A, note: "2016 Microchip收购"}
+  - {from: "MICREL INC", match: "^micrel\\b|麦瑞", to: "Microchip Technology", conf: A, note: "2015 Microchip收购"}
+  - {from: "MICROSEMI CORP", match: "^microsemi|美高森美", to: "Microchip Technology", conf: A, note: "2018 Microchip收购"}
+  - {from: "FAIRCHILD SEMICONDUCTOR CORP", match: "^fairchild semi|仙童", to: "onsemi", conf: A, note: "2016 onsemi收购"}
+  - {from: "INTERNATIONAL RECTIFIER CORP", match: "international rectifier|国际整流器", to: "Infineon Technologies", conf: A, note: "2015 Infineon收购"}
+  - {from: "CYPRESS SEMICONDUCTOR CORP", match: "^cypress|赛普拉斯", to: "Infineon Technologies", conf: A, note: "2020 Infineon收购"}
+  - {from: "SPANSION LLC", match: "^spansion|飞索", to: "Infineon Technologies", conf: A, note: "2015 Cypress→2020 Infineon"}
+  - {from: "FREESCALE SEMICONDUCTOR INC", match: "^freescale|飞思卡尔", to: "NXP Semiconductors", conf: A, note: "2015 NXP收购"}
+  - {from: "INTEGRATED DEVICE TECHNOLOGY INC", match: "integrated device tech|^idt\\b", to: "Renesas Electronics", conf: A, note: "2019 Renesas收购"}
+  - {from: "INTERSIL CORP", match: "^intersil", to: "Renesas Electronics", conf: A, note: "2017 Renesas收购"}
+  - {from: "NATIONAL SEMICONDUCTOR CORP", match: "^national semi|美国国家半导体", to: "Texas Instruments", conf: A, note: "2011 TI收购"}
+  - {from: "XILINX INC", match: "^xilinx|赛灵思", to: "AMD", conf: A, note: "2022 AMD收购"}
+  - {from: "AVAGO TECHNOLOGIES INC", match: "^avago|安华高", to: "Broadcom", conf: A, note: "2016 更名Broadcom Inc"}
+  - {from: "HITTITE MICROWAVE CORP", match: "^hittite", to: "Analog Devices", conf: A, note: "2014 ADI收购"}
+  - {from: "EXAR CORP", match: "^exar\\b", to: "MaxLinear", conf: A, note: "2017 MaxLinear收购"}
+  - {from: "PERICOM SEMICONDUCTOR CORP", match: "^pericom|百利通", to: "Diodes Inc", conf: A, note: "2015 Diodes收购"}
+  - {from: "EPCOS AG", match: "^epcos|爱普科斯", to: "TDK", conf: A, note: "2008 TDK收购"}
+  # —— IHS 数据中出现的全部被并购/更名厂商（由映射表生成）——
+  - {from: "QIMONDA AG", to: "Qimonda (已破产)", conf: C, note: "2009 破产，无继承者；保留原名，标记停产"}
+  - {from: "THOMAS & BETTS CORP", to: "ABB", conf: A, note: "2012 ABB收购"}
+  - {from: "SEIKO INSTRUMENTS USA INC", to: "ABLIC", conf: A, note: "2016 半导体分拆为ABLIC(现属MinebeaMitsumi)"}
+  - {from: "ADVANCED MICRO DEVICES INC", to: "AMD", conf: B, rules: [{families: "MEMORY_IC", to: "Infineon Technologies"}], note: "2003 Flash分拆为Spansion；Flash→Infineon(Spansion)；其余→AMD"}
+  - {from: "MONOLITHIC MEMORIES", to: "AMD", conf: C, note: "1987 AMD收购；PAL→Lattice(Vantis)"}
+  - {from: "XILINX INC", to: "AMD", conf: A, note: "2022 AMD收购"}
+  - {from: "ARTESYN TECHNOLOGIES INC", to: "Advanced Energy", conf: A, note: "Emerson→Artesyn→2019 Advanced Energy"}
+  - {from: "ALTERA CORP", to: "Altera", conf: A, note: "2015 Intel收购，2025 重新独立"}
+  - {from: "FCI", to: "Amphenol", conf: A, note: "2016 Amphenol收购(Amphenol FCI)"}
+  - {from: "THERMOMETRICS", to: "Amphenol", conf: A, note: "Amphenol Advanced Sensors"}
+  - {from: "DALLAS SEMICONDUCTOR", to: "Analog Devices", conf: A, note: "2001 Maxim→2021 ADI"}
+  - {from: "HITTITE MICROWAVE CORP", to: "Analog Devices", conf: A, note: "2014 ADI收购"}
+  - {from: "LINEAR TECHNOLOGY CORP", to: "Analog Devices", conf: A, note: "2017 ADI收购"}
+  - {from: "MAXIM INTEGRATED PRODUCTS INC", to: "Analog Devices", conf: A, note: "2021 ADI收购"}
+  - {from: "DELPHI CONNECTION SYSTEMS", to: "Aptiv", conf: A, note: "2017 更名Aptiv"}
+  - {from: "CINCH CONNECTORS", to: "Bel Fuse", conf: A, note: "2010 Bel收购"}
+  - {from: "POWER-ONE INC", to: "Bel Fuse", conf: A, note: "2013 ABB→2014 Bel Power Solutions"}
+  - {from: "AGERE SYSTEMS INC", to: "Broadcom", conf: A, note: "2007 LSI→Broadcom"}
+  - {from: "AGILENT TECHNOLOGIES INC", to: "Keysight", conf: B, rules: [{families: "_IC|OPTOELECTRONIC|FIBER_OPTIC|RF_MICROWAVE|DIODE|TRANSISTOR", to: "Broadcom"}], note: "2005 半导体分拆为Avago；半导体/光电→Broadcom；测试测量→Keysight"}
+  - {from: "AT & T MICROELECTRONICS", to: "Broadcom", conf: A, note: "Lucent→Agere→Broadcom"}
+  - {from: "AVAGO TECHNOLOGIES INC", to: "Broadcom", conf: A, note: "2016 更名Broadcom Inc"}
+  - {from: "BROADCOM CORP", to: "Broadcom", conf: A, note: "2016 Avago收购"}
+  - {from: "HEWLETT PACKARD CO", to: "HP", conf: B, rules: [{families: "_IC|OPTOELECTRONIC|FIBER_OPTIC|RF_MICROWAVE|DIODE|TRANSISTOR", to: "Broadcom"}], note: "HP→Agilent→Avago；光电/半导体→Broadcom"}
+  - {from: "LSI CORP", to: "Broadcom", conf: A, note: "2014 Avago收购"}
+  - {from: "LUCENT TECHNOLOGIES INC", to: "Lucent Technologies", conf: B, rules: [{families: "_IC|OPTOELECTRONIC|FIBER_OPTIC", to: "Broadcom"}], note: "Agere→LSI→Broadcom；仅微电子部分"}
+  - {from: "PLX TECHNOLOGY INC", to: "Broadcom", conf: A, note: "2014 Avago收购"}
+  - {from: "SEEQ TECHNOLOGY INC", to: "Broadcom", conf: A, note: "1999 LSI→Broadcom"}
+  - {from: "ANADIGICS INC", to: "Coherent", conf: A, note: "2016 II-VI→Coherent"}
+  - {from: "LITE-ON SEMICONDUCTOR CORP", to: "Diodes Inc", conf: A, note: "2020 Diodes收购"}
+  - {from: "PERICOM SEMICONDUCTOR CORP", to: "Diodes Inc", conf: A, note: "2015 Diodes收购"}
+  - {from: "SARONIX", to: "Diodes Inc", conf: A, note: "Pericom→Diodes"}
+  - {from: "ZETEX PLC", to: "Diodes Inc", conf: A, note: "2008 Diodes收购"}
+  - {from: "COOPER ELECTRONIC TECHNOLOGIES", to: "Eaton", conf: A, note: "2012 Eaton收购"}
+  - {from: "COOPER INDUSTRIES", to: "Eaton", conf: A, note: "2012 Eaton收购"}
+  - {from: "HON HAI PRECISION INDUSTRY CO LTD", to: "Foxconn Interconnect (FIT)", conf: C, note: "连接器业务归FIT"}
+  - {from: "AEROFLEX COLORADO SPRINGS", to: "Frontgrade Technologies", conf: A, note: "Aeroflex→Cobham→CAES→Frontgrade(2023)"}
+  - {from: "AEROFLEX PLAINVIEW", to: "Frontgrade Technologies", conf: A, note: "Aeroflex→Cobham→CAES→Frontgrade"}
+  - {from: "FUJITSU SEMICONDUCTOR AMERICA INC", to: "Fujitsu", conf: C, note: "按类别判断；MCU/模拟→Infineon(Spansion 2013)；FRAM→RAMXEED"}
+  - {from: "IBM MICROELECTRONICS", to: "GlobalFoundries", conf: C, note: "2015 晶圆业务转让，器件多已停产"}
+  - {from: "CYPRESS SEMICONDUCTOR CORP", to: "Infineon Technologies", conf: A, note: "2020 Infineon收购"}
+  - {from: "INTERNATIONAL RECTIFIER CORP", to: "Infineon Technologies", conf: A, note: "2015 Infineon收购"}
+  - {from: "INTERNATIONAL RECTIFIER HIREL PRODUCTS LLC", to: "Infineon Technologies", conf: A, note: "2015 Infineon收购"}
+  - {from: "LAMBDA ADVANCED ANALOG INC", to: "Infineon Technologies", conf: C, note: "经IR HiRel并入Infineon，需核实"}
+  - {from: "RAMTRON INTERNATIONAL CORP", to: "Infineon Technologies", conf: A, note: "2012 Cypress→Infineon"}
+  - {from: "SIEMENS A G", to: "TDK", conf: B, rules: [{families: "_IC|DIODE|TRANSISTOR|OPTOELECTRONIC|TRIGGER_DEVICE|SENSOR", to: "Infineon Technologies"}], note: "1999 半导体分拆为Infineon；半导体→Infineon；无源→TDK(EPCOS)"}
+  - {from: "SIMTEK CORP", to: "Infineon Technologies", conf: A, note: "2008 Cypress→Infineon"}
+  - {from: "SPANSION INC", to: "Infineon Technologies", conf: A, note: "2015 Cypress→2020 Infineon"}
+  - {from: "SPANSION LLC", to: "Infineon Technologies", conf: A, note: "2015 Cypress→2020 Infineon"}
+  - {from: "INTEL CORP", to: "Intel", conf: C, note: "按类别判断；NOR Flash→Micron；NAND→Solidigm(SK hynix)"}
+  - {from: "KYOCERA KINSEKI CORP", to: "KYOCERA", conf: A, note: "Kyocera集团"}
+  - {from: "AVX CORP", to: "KYOCERA AVX", conf: A, note: "2020 Kyocera全资"}
+  - {from: "SYFER TECHNOLOGY LTD", to: "Knowles", conf: A, note: "2012 Knowles(Dover)收购"}
+  - {from: "VANTIS CORP", to: "Lattice Semiconductor", conf: A, note: "1999 Lattice收购"}
+  - {from: "IXYS CORP", to: "Littelfuse", conf: A, note: "2018 Littelfuse收购"}
+  - {from: "ZILOG INC", to: "Littelfuse", conf: A, note: "2010 IXYS→Littelfuse"}
+  - {from: "M/A-COM TECHNOLOGY SOLUTIONS INC", to: "MACOM", conf: A, note: "品牌更名"}
+  - {from: "MINDSPEED TECHNOLOGIES INC", to: "MACOM", conf: A, note: "2013 MACOM收购"}
+  - {from: "TYCO ELECTRONICS M/A-COM", to: "MACOM", conf: A, note: "2010 剥离为MACOM"}
+  - {from: "GALILEO TECHNOLOGY INC", to: "Marvell", conf: A, note: "2001 Marvell收购"}
+  - {from: "CADEKA MICROCIRCUITS LLC", to: "MaxLinear", conf: A, note: "2014 Exar→MaxLinear"}
+  - {from: "EXAR CORP", to: "MaxLinear", conf: A, note: "2017 MaxLinear收购"}
+  - {from: "SIPEX CORP", to: "MaxLinear", conf: A, note: "2007 Exar→MaxLinear"}
+  - {from: "ACTEL CORP", to: "Microchip Technology", conf: A, note: "2010 Microsemi→2018 Microchip"}
+  - {from: "ADVANCED POWER TECHNOLOGY INC", to: "Microchip Technology", conf: A, note: "2006 Microsemi→Microchip"}
+  - {from: "ATMEL CORP", to: "Microchip Technology", conf: A, note: "2016 Microchip收购"}
+  - {from: "ATMEL WIRELESS & MICROCONTROLLERS", to: "Microchip Technology", conf: A, note: "Atmel→Microchip"}
+  - {from: "CORNING FREQUENCY CONTROL INC", to: "Microchip Technology", conf: C, note: "经Vectron并入，需核实"}
+  - {from: "ELECTRONIC DESIGNS INC", to: "Microchip Technology", conf: A, note: "White Electronic Designs→Microsemi→Microchip"}
+  - {from: "GEC PLESSEY SEMICONDUCTORS", to: "Microchip Technology", conf: C, note: "Mitel/Zarlink→Microchip；功率部分→Dynex"}
+  - {from: "LEGERITY INC", to: "Microchip Technology", conf: A, note: "Zarlink→Microsemi→Microchip"}
+  - {from: "MATRA MHS", to: "Microchip Technology", conf: A, note: "Temic/Atmel Nantes→Microchip"}
+  - {from: "MICREL INC", to: "Microchip Technology", conf: A, note: "2015 Microchip收购"}
+  - {from: "MICROSEMI COMMERCIAL BUSINESS UNIT", to: "Microchip Technology", conf: A, note: "Microsemi→Microchip"}
+  - {from: "MICROSEMI CORP", to: "Microchip Technology", conf: A, note: "2018 Microchip收购"}
+  - {from: "MICROSEMI CORP-ANALOG MIXED SIGNAL GROUP", to: "Microchip Technology", conf: A, note: "Microsemi→Microchip"}
+  - {from: "MICROSEMI CORP-COLORADO", to: "Microchip Technology", conf: A, note: "Microsemi→Microchip"}
+  - {from: "MICROSEMI CORP-IRELAND", to: "Microchip Technology", conf: A, note: "Microsemi→Microchip"}
+  - {from: "MICROSEMI CORP-LAWRENCE", to: "Microchip Technology", conf: A, note: "Microsemi→Microchip"}
+  - {from: "MICROSEMI CORP-LOWELL", to: "Microchip Technology", conf: A, note: "Microsemi→Microchip"}
+  - {from: "MICROSEMI CORP-PMG MICROELECTRONICS", to: "Microchip Technology", conf: A, note: "Microsemi→Microchip"}
+  - {from: "MICROSEMI CORP-SCOTTSDALE", to: "Microchip Technology", conf: A, note: "Microsemi→Microchip"}
+  - {from: "MICROSEMI POWER PRODUCTS GROUP", to: "Microchip Technology", conf: A, note: "Microsemi→Microchip"}
+  - {from: "MICROSEMI SOC PRODUCTS GROUP", to: "Microchip Technology", conf: A, note: "Actel→Microsemi→Microchip"}
+  - {from: "MITEL SEMICONDUCTOR", to: "Microchip Technology", conf: A, note: "Zarlink→Microsemi→Microchip"}
+  - {from: "SIERRA SEMICONDUCTOR", to: "Microchip Technology", conf: A, note: "PMC-Sierra→Microsemi→Microchip"}
+  - {from: "SILICON STORAGE TECHNOLOGY INC", to: "Microchip Technology", conf: A, note: "2010 Microchip收购"}
+  - {from: "STANDARD MICROSYSTEMS CORP", to: "Microchip Technology", conf: A, note: "2012 Microchip收购"}
+  - {from: "SUPERTEX INC", to: "Microchip Technology", conf: A, note: "2014 Microchip收购"}
+  - {from: "TELCOM SEMICONDUCTOR INC", to: "Microchip Technology", conf: A, note: "2000 Microchip收购"}
+  - {from: "TEMIC SEMICONDUCTORS", to: "Vishay", conf: B, rules: [{families: "_IC", to: "Microchip Technology"}], note: "Temic拆分；IC→Atmel→Microchip；分立/光电→Vishay"}
+  - {from: "VECTRON INTERNATIONAL", to: "Microchip Technology", conf: A, note: "2021 Microchip收购"}
+  - {from: "VITESSE SEMICONDUCTOR CORP", to: "Microchip Technology", conf: A, note: "2015 Microsemi→Microchip"}
+  - {from: "WHITE ELECTRONIC DESIGNS CORP", to: "Microchip Technology", conf: A, note: "2010 Microsemi→Microchip"}
+  - {from: "ZARLINK SEMICONDUCTOR INC", to: "Microchip Technology", conf: A, note: "2011 Microsemi→Microchip"}
+  - {from: "ELPIDA MEMORY INC", to: "Micron Technology", conf: A, note: "2013 Micron收购"}
+  - {from: "NUMONYX", to: "Micron Technology", conf: A, note: "2010 Micron收购"}
+  - {from: "AUSTIN SEMICONDUCTOR INC", to: "Micross Components", conf: A, note: "Micross收购"}
+  - {from: "TOKO INC", to: "Murata", conf: A, note: "2014 Murata收购"}
+  - {from: "PEREGRINE SEMICONDUCTOR CORP", to: "Murata (pSemi)", conf: A, note: "2014 Murata收购"}
+  - {from: "C&D TECHNOLOGIES INC", to: "Murata Power Solutions", conf: C, note: "需核实；电源模块→Murata"}
+  - {from: "FREESCALE SEMICONDUCTOR INC", to: "NXP Semiconductors", conf: A, note: "2015 NXP收购"}
+  - {from: "MOTOROLA INC", to: "NXP Semiconductors", conf: C, note: "需按物料逐条判断；标准逻辑/分立/模拟→onsemi(1999)；MCU/DSP/RF→NXP"}
+  - {from: "PHILIPS COMPONENTS", to: "Yageo", conf: B, rules: [{families: "_IC|DIODE|TRANSISTOR|RF_MICROWAVE", to: "NXP Semiconductors"}], note: "2006 半导体分拆为NXP；半导体→NXP；无源→Yageo/Vishay"}
+  - {from: "SIGNETICS CORP", to: "NXP Semiconductors", conf: A, note: "Philips→NXP"}
+  - {from: "VLSI TECHNOLOGY INC", to: "NXP Semiconductors", conf: A, note: "1999 Philips→NXP"}
+  - {from: "NEW JAPAN RADIO CO LTD", to: "Nisshinbo Micro Devices", conf: A, note: "2022 与Ricoh电子器件合并"}
+  - {from: "SANYO ELECTRIC CO LTD", to: "Panasonic", conf: A, note: "2011 Panasonic全资"}
+  - {from: "HITACHI METALS LTD", to: "Proterial", conf: A, note: "2023 更名"}
+  - {from: "GAZELLE MICROCIRCUITS INC", to: "Qorvo", conf: A, note: "TriQuint→Qorvo"}
+  - {from: "RF MICRO DEVICES INC", to: "Qorvo", conf: A, note: "2015 合并为Qorvo"}
+  - {from: "TRIQUINT SEMICONDUCTOR INC", to: "Qorvo", conf: A, note: "2015 合并为Qorvo"}
+  - {from: "LAPIS SEMICONDUCTOR CO LTD", to: "ROHM", conf: A, note: "ROHM集团"}
+  - {from: "OKI ELECTRIC INDUSTRY CO LTD", to: "OKI Electric", conf: B, rules: [{families: "_IC|DIODE|TRANSISTOR|OPTOELECTRONIC", to: "ROHM"}], note: "2008 ROHM收购半导体业务；半导体→LAPIS→ROHM"}
+  - {from: "C-MAC MICROTECHNOLOGY", to: "Rakon / Vectron", conf: C, note: "频率器件拆分，需核实"}
+  - {from: "ELANTEC", to: "Renesas Electronics", conf: A, note: "2002 Intersil→Renesas"}
+  - {from: "HARRIS SEMICONDUCTOR", to: "onsemi", conf: B, rules: [{families: "_IC", to: "Renesas Electronics"}], note: "1999 拆分；IC→Renesas(Intersil)；分立/功率→onsemi(Fairchild)"}
+  - {from: "HITACHI LTD", to: "Hitachi", conf: B, rules: [{families: "_IC", to: "Renesas Electronics"}], note: "2003 半导体并入Renesas；IC→Renesas；非IC保留Hitachi"}
+  - {from: "INTEGRATED CIRCUIT SYSTEMS INC", to: "Renesas Electronics", conf: A, note: "2005 IDT→Renesas"}
+  - {from: "INTEGRATED DEVICE TECHNOLOGY INC", to: "Renesas Electronics", conf: A, note: "2019 Renesas收购"}
+  - {from: "INTERSIL CORP", to: "Renesas Electronics", conf: A, note: "2017 Renesas收购"}
+  - {from: "MITSUBISHI ELECTRIC CORP", to: "Mitsubishi Electric", conf: B, rules: [{families: "_IC", to: "Renesas Electronics"}], note: "2003 半导体并入Renesas；IC(MCU/存储/逻辑)→Renesas；功率/光电保留Mitsubishi"}
+  - {from: "NEC COMPOUND SEMICONDUCTOR DEVICES LTD", to: "Renesas Electronics", conf: C, note: "化合物半导体并入Renesas，部分由CEL代理"}
+  - {from: "NEC ELECTRONICS AMERICA INC", to: "Renesas Electronics", conf: A, note: "2010 合并为Renesas"}
+  - {from: "NEC ELECTRONICS CORP", to: "Renesas Electronics", conf: A, note: "2010 合并为Renesas"}
+  - {from: "QUALITY SEMICONDUCTOR INC", to: "Renesas Electronics", conf: A, note: "1999 IDT→Renesas"}
+  - {from: "RENESAS TECHNOLOGY CORP", to: "Renesas Electronics", conf: A, note: "2010 与NEC Electronics合并"}
+  - {from: "XICOR INC", to: "Renesas Electronics", conf: A, note: "2004 Intersil→Renesas"}
+  - {from: "ZMD AG", to: "Renesas Electronics", conf: A, note: "2015 IDT→Renesas"}
+  - {from: "HITACHI CHEMICAL COMPANY AMERICA LTD", to: "Resonac", conf: A, note: "2023 更名"}
+  - {from: "GOLDSTAR ELECTRON CO LTD", to: "SK hynix", conf: A, note: "LG Semicon→Hynix"}
+  - {from: "HYNIX SEMICONDUCTOR INC", to: "SK hynix", conf: A, note: "2012 更名SK hynix"}
+  - {from: "LG SEMICON CO LTD", to: "SK hynix", conf: A, note: "1999 Hynix收购"}
+  - {from: "GENESIS MICROCHIP", to: "STMicroelectronics", conf: A, note: "2008 ST收购"}
+  - {from: "EPSON TOYOCOM CORP", to: "Seiko Epson", conf: A, note: "2009 并入Epson"}
+  - {from: "ALPHA INDUSTRIES INC", to: "Skyworks Solutions", conf: A, note: "2002 合并为Skyworks"}
+  - {from: "SPECTRUM CONTROL INC", to: "Spectrum Control", conf: C, note: "2011 API Technologies→再更名Spectrum Control"}
+  - {from: "MEDER ELECTRONIC AG", to: "Standex Electronics", conf: A, note: "2014 Standex收购"}
+  - {from: "CONEXANT SYSTEMS", to: "Synaptics", conf: A, note: "2017 Synaptics收购"}
+  - {from: "EPCOS AG", to: "TDK", conf: A, note: "2008 TDK收购，现TDK Electronics"}
+  - {from: "CONNECTEURS ELECTRIQUES DEUTSCH", to: "TE Connectivity", conf: A, note: "2012 TE收购Deutsch"}
+  - {from: "DEUTSCH ENGINEERED CONNECTING DEVICES", to: "TE Connectivity", conf: A, note: "2012 TE收购Deutsch"}
+  - {from: "TE CONNECTIVITY LTD", to: "TE Connectivity", conf: A, note: ""}
+  - {from: "TYCO ELECTRONICS ALCOSWITCH", to: "TE Connectivity", conf: A, note: "2011 更名TE"}
+  - {from: "TYCO ELECTRONICS AMP", to: "TE Connectivity", conf: A, note: "2011 更名TE"}
+  - {from: "TYCO ELECTRONICS CII", to: "TE Connectivity", conf: A, note: "2011 更名TE"}
+  - {from: "TYCO ELECTRONICS COMPONENTS", to: "TE Connectivity", conf: A, note: "2011 更名TE"}
+  - {from: "TYCO ELECTRONICS ELCON", to: "TE Connectivity", conf: A, note: "2011 更名TE"}
+  - {from: "BI TECHNOLOGIES CORP", to: "TT Electronics", conf: A, note: "TT Electronics子公司"}
+  - {from: "INTERNATIONAL RESISTIVE CO INC", to: "TT Electronics", conf: A, note: "TT Electronics子公司"}
+  - {from: "OPTEK TECHNOLOGY INC", to: "TT Electronics", conf: A, note: "TT Electronics子公司"}
+  - {from: "WELWYN COMPONENTS LTD", to: "TT Electronics", conf: A, note: "TT Electronics子公司"}
+  - {from: "ANAREN INC", to: "TTM Technologies", conf: A, note: "2018 TTM收购"}
+  - {from: "MS KENNEDY CORP", to: "TTM Technologies", conf: A, note: "Anaren→2018 TTM"}
+  - {from: "ATMEL GRENOBLE", to: "Teledyne e2v", conf: A, note: "2006 e2v收购→2017 Teledyne"}
+  - {from: "E2V TECHNOLOGIES PLC", to: "Teledyne e2v", conf: A, note: "2017 Teledyne收购"}
+  - {from: "THOMSON-CSF SEMICONDUCTORS", to: "Teledyne e2v", conf: C, note: "TCS→Atmel Grenoble→e2v→Teledyne"}
+  - {from: "BENCHMARQ MICROELECTRONICS INC", to: "Texas Instruments", conf: A, note: "1998 Unitrode→TI"}
+  - {from: "BURR-BROWN CORP", to: "Texas Instruments", conf: A, note: "2000 TI收购"}
+  - {from: "NATIONAL SEMICONDUCTOR CORP", to: "Texas Instruments", conf: A, note: "2011 TI收购"}
+  - {from: "UNITRODE CORP", to: "Texas Instruments", conf: A, note: "1999 TI收购"}
+  - {from: "TOSHIBA AMERICA ELECTRONIC COMPONENTS INC", to: "Toshiba", conf: B, rules: [{families: "MEMORY_IC", to: "Kioxia"}], note: "2017 存储分拆为Kioxia；MEMORY_IC(NAND)→Kioxia；其余→Toshiba"}
+  - {from: "TOSHIBA CORP", to: "Toshiba", conf: B, rules: [{families: "MEMORY_IC", to: "Kioxia"}], note: "2017 存储分拆为Kioxia；MEMORY_IC(NAND)→Kioxia；其余→Toshiba"}
+  - {from: "GENERAL SEMICONDUCTOR INC", to: "Vishay", conf: A, note: "2001 Vishay收购"}
+  - {from: "SIMPLE TECH INC", to: "Western Digital", conf: A, note: "STEC→2013 WD"}
+  - {from: "ARCOTRONICS GROUP", to: "YAGEO (KEMET)", conf: A, note: "2007 KEMET→Yageo"}
+  - {from: "EVOX RIFA GROUP OYJ", to: "YAGEO (KEMET)", conf: A, note: "2007 KEMET→Yageo"}
+  - {from: "KEMET ELECTRONICS CORP", to: "YAGEO (KEMET)", conf: A, note: "2020 Yageo收购"}
+  - {from: "NEC TOKIN CORP", to: "YAGEO (KEMET)", conf: A, note: "2017 KEMET(TOKIN)→Yageo"}
+  - {from: "THE CHERRY CORP", to: "ZF / Cherry", conf: C, note: "2008 ZF收购；开关/传感器→ZF；键盘→Cherry"}
+  - {from: "AUSTRIAMICROSYSTEMS AG", to: "ams OSRAM", conf: A, note: "更名"}
+  - {from: "CATALYST SEMICONDUCTOR INC", to: "onsemi", conf: A, note: "2008 onsemi收购"}
+  - {from: "CHERRY SEMICONDUCTOR CORP", to: "onsemi", conf: A, note: "2000 onsemi收购"}
+  - {from: "FAIRCHILD SEMICONDUCTOR CORP", to: "onsemi", conf: A, note: "2016 onsemi收购"}
+  - {from: "ON SEMICONDUCTOR", to: "onsemi", conf: A, note: "2021 品牌更名"}
+  - {from: "RAYTHEON SEMICONDUCTOR", to: "onsemi", conf: A, note: "1997 Fairchild→onsemi"}
+  - {from: "SANYO SEMICONDUCTOR CO LTD", to: "onsemi", conf: A, note: "2011 onsemi收购"}
+  - {from: "SIGNAL PROCESSING TECHNOLOGIES", to: "onsemi", conf: A, note: "Fairchild→onsemi"}

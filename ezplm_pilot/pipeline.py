@@ -21,6 +21,7 @@ from .models import Part, Proposal
 from .staging import StagedPart, StagedProposal, StagedCategory, SyncState, JobLog, get_session
 from .taxonomy import Taxonomy, Node
 from .gap import value_score
+from .ihs import IhsMatcher, norm_mpn
 
 PROCESS_VERSION = "0.2"
 
@@ -45,12 +46,12 @@ def load_taxonomy(db) -> Taxonomy:
 
 
 def _to_part(sp: StagedPart) -> Part:
-    return Part(id=sp.id, mpn=sp.mpn or "", manufacturer=sp.manufacturer or "", manufacturer_id=sp.manufacturer_id or "",
+    return Part(id=sp.id, mpn=sp.mpn or "", manufacturer=sp.manufacturer or sp.new_manufacturer or "", manufacturer_id=sp.manufacturer_id or "",
                 category=sp.new_category or sp.orig_category or "", category_id=sp.new_category_id or sp.orig_category_id or "",
                 symbol=sp.new_symbol or sp.orig_symbol or "", symbol_lib=sp.orig_symbol_lib or "",
                 footprint=sp.new_footprint or sp.orig_footprint or "", footprint_lib=sp.orig_footprint_lib or "",
                 has_pdf=bool(sp.orig_has_pdf), has_image=bool(sp.orig_has_image), url=sp.new_url or sp.orig_url or "",
-                description=sp.description or "", description_en=sp.description_en or "", status=sp.status or "")
+                description=sp.description or "", description_en=sp.new_description_en or sp.description_en or "", status=sp.status or "")
 
 
 def _add_tags(sp: StagedPart, tags: Iterable[str]):
@@ -61,7 +62,11 @@ def _add_tags(sp: StagedPart, tags: Iterable[str]):
     sp.tags = ",".join(cur)
 
 
-FIELD_TO_NEW = {"category_id": "new_category_id", "symbol": "new_symbol", "footprint": "new_footprint", "url": "new_url", "datasheet": "new_datasheet"}
+FIELD_TO_NEW = {"category_id": "new_category_id", "symbol": "new_symbol", "footprint": "new_footprint", "url": "new_url", "datasheet": "new_datasheet",
+                "description_en": "new_description_en", "manufacturer": "new_manufacturer"}
+# 回写字段（ezPLM PATCH set 的键）→ 暂存列。回写前逐条核对 ezPLM 当前值，只填空
+EXPORT_FIELDS = (("categoryId", "new_category_id"), ("symbol", "new_symbol"), ("footprint", "new_footprint"), ("url", "new_url"),
+                 ("datasheetUrl", "new_datasheet"), ("descriptionEn", "new_description_en"), ("manufacturer", "new_manufacturer"))
 
 
 def apply_proposal(db, sp: StagedPart, pr: StagedProposal, tax: Taxonomy | None = None):
@@ -122,6 +127,7 @@ def ingest(source, batch: int = 500, max_batches: int | None = None, job: str | 
                 if changed:
                     _add_tags(sp, ["原值已变更"]); n_changed += 1
             sp.mpn, sp.manufacturer, sp.manufacturer_id = p.mpn, p.manufacturer, p.manufacturer_id
+            sp.mpn_norm = norm_mpn(p.mpn)
             sp.description, sp.description_en, sp.status = p.description, p.description_en, p.status
             sp.orig_category_id, sp.orig_category = p.category_id, p.category
             sp.orig_symbol, sp.orig_symbol_lib, sp.orig_footprint, sp.orig_footprint_lib = p.symbol, p.symbol_lib, p.footprint, p.footprint_lib
@@ -190,6 +196,8 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
     pkg = PackageMapper(tax)
     urlf = UrlFiller() if do_urls else None
     idx = LibIndex(libindex) if Path(libindex).exists() else None
+    ihs = IhsMatcher(db, tax=tax, pkg=pkg, auto_min=auto_fill_min)
+    log(f"IHS 参考记录 {IhsMatcher.n_ref(db)} 条（无记录时只做厂商谱系提示）")
 
     stats = {"job": job, "batches": 0, "parts": 0, "proposals": 0, "auto_fill": 0, "flag_mismatch": 0, "review": 0}
     while True:
@@ -232,34 +240,17 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
         props: list[Proposal] = []
         for name, fn in (("分类", lambda: [clf.classify(p) for p in parts]), ("封装(MPN映射)", lambda: list(propose_footprints_by_mpn(parts, idx)) if idx else []),
                          ("封装", lambda: list(pkg.propose(parts, attrs))),
-                         ("符号", lambda: list(propose_symbols(parts, idx)) if idx else []), ("链接", lambda: list(urlf.propose(parts)) if urlf else [])):
+                         ("符号", lambda: list(propose_symbols(parts, idx)) if idx else []), ("链接", lambda: list(urlf.propose(parts)) if urlf else []),
+                         ("IHS", lambda: _ihs_props(ihs, parts, by_id, props))):
             try:
                 props += fn()
             except Exception as e:  # noqa  —— 单个模块出错不影响本批其它模块
                 log(f"  ! {name}模块出错，本批跳过该模块：{str(e)[:200]}")
-        by_field: dict = {}
         # 重跑时作废上一轮同物料、同字段的待复核建议，避免重复
         old = db.execute(select(StagedProposal).where(StagedProposal.part_id.in_(list(by_id)), StagedProposal.review_status == "pending")).scalars().all()
         for o in old:
             o.review_status = "rejected"; o.review_note = "superseded by reprocess"
-        for pr in props:
-            if pr.action in ("ok", "skip"):
-                if pr.action == "skip":
-                    _add_tags(by_id[pr.part_id], pr.tags)
-                continue
-            by_field[pr.field] = by_field.get(pr.field, 0) + 1
-            sp = by_id[pr.part_id]
-            rec = StagedProposal(part_id=pr.part_id, mpn=pr.mpn, field=pr.field, current=pr.current, proposed=pr.proposed,
-                                 proposed_label=pr.proposed_label, confidence=pr.confidence, action=pr.action, method=pr.method,
-                                 evidence_json=json.dumps(pr.evidence, ensure_ascii=False), tags=",".join(pr.tags), job=job,
-                                 review_status="auto" if pr.action == "auto_fill" else "pending")
-            db.add(rec)
-            stats["proposals"] += 1
-            stats[pr.action] = stats.get(pr.action, 0) + 1
-            if pr.action == "auto_fill":
-                apply_proposal(db, sp, rec, tax)
-            else:
-                _add_tags(sp, pr.tags)
+        by_field = _save_proposals(db, props, by_id, job, tax, stats)
         for r in rows:
             r.processed_at = datetime.utcnow(); r.process_version = PROCESS_VERSION
         stats["parts"] += len(rows)
@@ -277,6 +268,88 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
         stats["llm_errors"] = clf.llm.n_errors
         if clf.llm.n_errors:
             log(f"  ! LLM 调用失败 {clf.llm.n_errors}/{clf.llm.n_calls} 次，最后一次错误：{clf.llm.last_error}")
+    db.close()
+    return stats
+
+
+def _ihs_props(ihs: IhsMatcher, parts: list[Part], by_id: dict, existing: list[Proposal]) -> list[Proposal]:
+    """IHS 建议；与本批其它模块重复（同物料、同字段、同建议值）的不再重复出。顺带记下每个物料的最佳 IHS 匹配。"""
+    for sp in by_id.values():
+        if sp.mpn_norm is None:
+            sp.mpn_norm = norm_mpn(sp.mpn)
+    seen = {(p.part_id, p.field, p.proposed) for p in existing}
+    out = [p for p in ihs.propose(parts) if (p.part_id, p.field, p.proposed) not in seen]
+    for pid, sp in by_id.items():
+        best = ihs.best.get(pid)
+        sp.ihs_objid, sp.ihs_match = (best[0].objid, best[1]) if best else (None, None)
+    return out
+
+
+def _save_proposals(db, props: list[Proposal], by_id: dict, job: str, tax, stats: dict) -> dict:
+    by_field: dict = {}
+    for pr in props:
+        if pr.action in ("ok", "skip"):
+            if pr.action == "skip":
+                _add_tags(by_id[pr.part_id], pr.tags)
+            continue
+        by_field[pr.field] = by_field.get(pr.field, 0) + 1
+        sp = by_id[pr.part_id]
+        rec = StagedProposal(part_id=pr.part_id, mpn=pr.mpn, field=pr.field, current=pr.current, proposed=pr.proposed,
+                             proposed_label=pr.proposed_label, confidence=pr.confidence, action=pr.action, method=pr.method,
+                             evidence_json=json.dumps(pr.evidence, ensure_ascii=False), tags=",".join(pr.tags), job=job,
+                             review_status="auto" if pr.action == "auto_fill" else "pending")
+        db.add(rec)
+        stats["proposals"] += 1
+        stats[pr.action] = stats.get(pr.action, 0) + 1
+        if pr.action == "auto_fill":
+            apply_proposal(db, sp, rec, tax)
+        else:
+            _add_tags(sp, pr.tags)
+    return by_field
+
+
+def ihs_match(batch: int = 500, job: str | None = None, only_matched: bool = True, stop=None, log=None, progress=None,
+              auto_fill_min: float = 0.85) -> dict:
+    """只跑 IHS 模块（不重置处理状态）：导入 IHS 数据后，给已处理过的物料补出 IHS 建议。
+    重跑时作废这些物料上一轮 IHS / 厂商谱系的待复核建议。only_matched=True 时只看型号在 ihs_ref 里出现的物料。"""
+    from .packages import PackageMapper
+    from .staging import IhsRef
+    log = log or (lambda m: None)
+    db = get_session()
+    job = job or f"ihs-{datetime.utcnow():%Y%m%d-%H%M}"
+    tax = load_taxonomy(db)
+    ihs = IhsMatcher(db, tax=tax, pkg=PackageMapper(tax), auto_min=auto_fill_min)
+    from .ihs import ensure_mpn_norm
+    ensure_mpn_norm(db)
+    base = select(StagedPart)
+    if only_matched:
+        base = base.where(StagedPart.mpn_norm.in_(select(IhsRef.mpn_norm)))
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
+    log(f"IHS 参考记录 {IhsMatcher.n_ref(db)} 条；待匹配物料 {total} 条")
+    stats = {"job": job, "batches": 0, "parts": 0, "proposals": 0, "auto_fill": 0, "flag_mismatch": 0, "review": 0, "matched": 0}
+    last = ""
+    while True:
+        rows = db.execute(base.where(StagedPart.id > last).order_by(StagedPart.id).limit(batch)).scalars().all()
+        if not rows:
+            break
+        last = rows[-1].id
+        stats["batches"] += 1
+        by_id = {r.id: r for r in rows}
+        for o in db.execute(select(StagedProposal).where(StagedProposal.part_id.in_(list(by_id)), StagedProposal.review_status == "pending",
+                                                         or_(StagedProposal.method.like("ihs%"), StagedProposal.method == "mfr-lineage"))).scalars():
+            o.review_status = "rejected"; o.review_note = "superseded by ihs-match"
+        props = _ihs_props(ihs, [_to_part(r) for r in rows], by_id, [])
+        by_field = _save_proposals(db, props, by_id, job, tax, stats)
+        stats["parts"] += len(rows)
+        stats["matched"] += len(ihs.best)
+        db.add(JobLog(job=job, stage="ihs", batch_no=stats["batches"], n_items=len(rows), finished_at=datetime.utcnow(),
+                      detail=json.dumps({k: v for k, v in stats.items() if k != "job"})))
+        db.commit()
+        log(f"批次 {stats['batches']}: {len(rows)} 条，命中 IHS {len(ihs.best)} → 建议 {sum(by_field.values())} {by_field}")
+        if progress:
+            progress({"done": stats["parts"], "total": total})
+        if stop and stop():
+            break
     db.close()
     return stats
 
@@ -314,8 +387,7 @@ def export(out_path: str | Path | None = None, apply: bool = False, api=None, ba
     out_path = out_path or (OUT_DIR / "writeback.jsonl")
     db = get_session()
     job = job or f"export-{datetime.utcnow():%Y%m%d-%H%M}"
-    cond = or_(StagedPart.new_category_id.isnot(None), StagedPart.new_symbol.isnot(None), StagedPart.new_footprint.isnot(None),
-               StagedPart.new_url.isnot(None), StagedPart.new_datasheet.isnot(None))
+    cond = or_(*[getattr(StagedPart, col).isnot(None) for _, col in EXPORT_FIELDS])
     rows = db.execute(select(StagedPart).where(cond, StagedPart.exported_at.is_(None))).scalars().all()
     # 有待复核建议的物料先不回写（等复核完）
     pending = {r[0] for r in db.execute(select(StagedProposal.part_id).where(StagedProposal.review_status == "pending")).all()}
@@ -324,7 +396,7 @@ def export(out_path: str | Path | None = None, apply: bool = False, api=None, ba
         if sp.id in pending:
             held += 1; continue
         st = {}
-        for f, col in (("categoryId", "new_category_id"), ("symbol", "new_symbol"), ("footprint", "new_footprint"), ("url", "new_url"), ("datasheetUrl", "new_datasheet")):
+        for f, col in EXPORT_FIELDS:
             v = getattr(sp, col)
             if v and (not only_fields or f in only_fields):
                 st[f] = v
@@ -393,7 +465,9 @@ def summary() -> dict:
             "footprint": q(select(func.count(StagedPart.id)).where(StagedPart.new_footprint.isnot(None))),
             "url": q(select(func.count(StagedPart.id)).where(StagedPart.new_url.isnot(None))),
             "datasheet": q(select(func.count(StagedPart.id)).where(StagedPart.new_datasheet.isnot(None))),
+            "description_en": q(select(func.count(StagedPart.id)).where(StagedPart.new_description_en.isnot(None))),
         },
+        "ihs_matched": q(select(func.count(StagedPart.id)).where(StagedPart.ihs_objid.isnot(None))),
         "proposals": {k: v for k, v in db.execute(select(StagedProposal.review_status, func.count()).group_by(StagedProposal.review_status)).all()},
         "by_field_action": [(f, a, n) for f, a, n in db.execute(select(StagedProposal.field, StagedProposal.action, func.count()).group_by(StagedProposal.field, StagedProposal.action)).all()],
         "jobs": [dict(job=j.job, stage=j.stage, batch_no=j.batch_no, n=j.n_items, at=j.finished_at) for j in db.execute(select(JobLog).order_by(JobLog.id.desc()).limit(15)).scalars()],

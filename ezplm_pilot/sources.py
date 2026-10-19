@@ -168,12 +168,14 @@ class ApiSource:
         return self._get(f"/partlibs/{part_id}").get("data", {})
 
     def get_part(self, part_id: str) -> dict:
-        """读取单条当前值，返回与回写 set 同名的键：categoryId/symbol/footprint/url/datasheetUrl。"""
+        """读取单条当前值，返回与回写 set 同名的键：categoryId/symbol/footprint/url/datasheetUrl/descriptionEn/manufacturer。"""
         d = self._get(f"/partlibs/{part_id}").get("data", {})
         cat, sym, fp, pdf = d.get("category") or {}, d.get("symbol") or {}, d.get("footprint") or {}, d.get("pdf") or {}
+        mf = d.get("manufacturer") or {}
         return {"categoryId": cat.get("id") if isinstance(cat, dict) else cat, "symbol": sym.get("name") if isinstance(sym, dict) else sym,
                 "footprint": fp.get("name") if isinstance(fp, dict) else fp, "url": d.get("url") or "",
-                "datasheetUrl": (pdf.get("url") if isinstance(pdf, dict) else pdf) or ""}
+                "datasheetUrl": (pdf.get("url") if isinstance(pdf, dict) else pdf) or "",
+                "descriptionEn": d.get("descriptionEn") or "", "manufacturer": (mf.get("name") if isinstance(mf, dict) else mf) or ""}
 
     def patch_parts(self, updates: list[dict]) -> dict:
         import requests

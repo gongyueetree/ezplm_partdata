@@ -86,6 +86,23 @@ API 能否全自动化：**可以**。读接口现在就有；补上 `PATCH /par
 | Eagle `.lbr` | KiCad 自带 Eagle 导入器 | SparkFun/Adafruit 大量 Eagle 库 |
 | GitHub 上的 `.kicad_sch/.kicad_pcb` 工程 | 代码搜索 `extension:kicad_sch`，按 star/是否有生产文件打分 → `scan --kind oshw-product|community` | 已验证 Winterbloom（量产产品） |
 
+## 2b. IHS 参考数据与厂商谱系
+
+IHS 参数库导出（2011-12 ~ 2012-02 快照，93 个 `*.csv.gz`，约 7000 万器件）作为参考证据接入，不新建物料、不放服务器：
+
+```bash
+# 本地运行；DATABASE_URL 指向 Railway Postgres（公网连接串）即可直接写线上暂存库
+python -m ezplm_pilot.cli ihs-load --dir "<IHS数据目录>"            # 只导入与暂存物料型号相同的记录 → ihs_ref 表；可重复运行
+python -m ezplm_pilot.cli ihs-load --dir "<IHS数据目录>" --families _IC   # 另外整类导入（如全部 IC，约 323 万条）
+python -m ezplm_pilot.cli ihs-match                                  # 给已处理过的物料补跑 IHS 建议（process 会自动带上）
+```
+
+- **厂商谱系** `config/mfr_lineage.yaml`：规范厂商名 + 177 条并购/更名关系（A 整体并购 / B 按大类拆分 / C 待确认），由 `IHS数据/整合方案/厂商并购映射表.csv` 生成
+- **匹配级别**（同一规范化型号）：L1 型号+厂商 · L2 规范化型号+厂商 · L3 厂商经谱系一致（如 IR→Infineon）· L4 ezPLM 无厂商 · L5 同号异厂（只参考）
+- **建议**：`description_en`（英文描述填空，L1/L2 自动写入）、`footprint`（IHS 封装描述 → KiCad 封装，进复核）、`manufacturer`（空厂商补全进复核；旧厂商名打"厂商已并购"标签，回写只填空，不会覆盖）
+- **物料详情页**的"IHS 参考"面板列出同型号的 IHS 记录：匹配级别、谱系、分类、封装、2012 年状态、全部参数
+- 生命周期和数据手册链接是 2012 年的数据，只展示不出建议；IHS 数据的使用请先确认授权
+
 ## 3. 已知限制 / 下一步
 
 - `kiutils` 对 KiCad 9 新格式个别封装文件解析失败（已加正则兜底数焊盘）；正式跑建议先 `kicad-cli fp upgrade` / `sym upgrade` 统一版本，或改用 `kicad-cli` + sexp 解析

@@ -45,6 +45,12 @@ class StagedPart(Base):
     new_footprint = Column(String(200))
     new_url = Column(String(500))
     new_datasheet = Column(String(500))
+    new_description_en = Column(Text)
+    new_manufacturer = Column(String(200))             # 只作提示：回写只填空，不会覆盖 ezPLM 已有制造商
+    # IHS 参考数据匹配结果（ihs.py）
+    mpn_norm = Column(String(120), index=True)         # 大写、去符号后的型号，用于和 IHS 等外部数据匹配
+    ihs_objid = Column(String(20))                     # 最佳匹配的 IHS Objectid
+    ihs_match = Column(String(40))                     # 匹配级别，如 "L2 型号+厂商"
     tags = Column(Text, default="")                    # 逗号分隔
     value_score = Column(Integer, default=0, index=True)
     # 处理状态
@@ -108,6 +114,26 @@ class CategoryParam(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class IhsRef(Base):
+    """IHS 参数库（2011-12 ~ 2012-02 快照）里与暂存物料型号相同的记录。只读参考，由 `cli ihs-load` 在本地导入。"""
+    __tablename__ = "ihs_ref"
+    objid = Column(String(20), primary_key=True)       # IHS Objectid
+    mpn = Column(String(120))
+    mpn_norm = Column(String(120), index=True)
+    mfr_ihs = Column(String(200))                      # IHS 原厂商名
+    mfr_current = Column(String(200))                  # 经谱系推导的当前归属（规范名）
+    lineage_conf = Column(String(2))                   # 谱系置信度 A/B/C；空 = 未被并购
+    family = Column(String(40))                        # IHS 大类（文件名），如 ANALOG_IC_AMP
+    part_category = Column(String(120))
+    description = Column(Text)
+    package = Column(String(200))                      # Mfr Package Description
+    status = Column(String(40))                        # 截至 2012-02 的生命周期
+    generic = Column(String(120))                      # Generic Number
+    datasheet = Column(String(500))
+    params_json = Column(Text)                         # 其余非空参数列
+    batch = Column(String(10))                         # 数据批次日期
+
+
 class SyncState(Base):
     __tablename__ = "sync_state"
     key = Column(String(60), primary_key=True)         # ingest:cursor / ingest:page / process:last_id ...
@@ -147,8 +173,14 @@ def get_engine(url: str | None = None):
     return eng
 
 
+_NEW_PART_COLUMNS = {           # 后加的 parts 列：create_all 不会给已有表加列，这里补上
+    "new_description_en": "TEXT", "new_manufacturer": "VARCHAR(200)",
+    "mpn_norm": "VARCHAR(120)", "ihs_objid": "VARCHAR(20)", "ihs_match": "VARCHAR(40)",
+}
+
+
 def _migrate(eng):
-    """小型就地迁移：旧库里 category_params.values 列改名为 vals。"""
+    """小型就地迁移：旧库里 category_params.values 列改名为 vals；parts 补新列。"""
     from sqlalchemy import inspect
     try:
         cols = {c["name"] for c in inspect(eng).get_columns("category_params")}
@@ -157,6 +189,13 @@ def _migrate(eng):
                 c.exec_driver_sql('ALTER TABLE category_params RENAME COLUMN "values" TO vals')
     except Exception:  # noqa
         pass
+    cols = {c["name"] for c in inspect(eng).get_columns("parts")}
+    missing = {k: v for k, v in _NEW_PART_COLUMNS.items() if k not in cols}
+    if missing:
+        with eng.begin() as c:
+            for name, typ in missing.items():
+                c.exec_driver_sql(f"ALTER TABLE parts ADD COLUMN {name} {typ}")
+            c.exec_driver_sql("CREATE INDEX IF NOT EXISTS ix_parts_mpn_norm ON parts (mpn_norm)")
 
 
 def get_session(url: str | None = None):
