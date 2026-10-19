@@ -29,6 +29,15 @@ app = FastAPI(title="ezPLM 暂存数据平台")
 security = HTTPBasic(auto_error=False)
 
 
+@app.exception_handler(Exception)
+async def _show_error(request: Request, exc: Exception):
+    """内部后台：把异常堆栈直接显示出来，便于排错（而不是只给一句 Internal Server Error）。"""
+    import traceback
+    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    print(tb)
+    return HTMLResponse(f"<h2 style='font-family:sans-serif'>页面出错（请把下面内容截图发给开发者）</h2><pre style='white-space:pre-wrap;font-size:12px'>{tb.replace('<','&lt;')}</pre>", status_code=500)
+
+
 def auth(cred: HTTPBasicCredentials | None = Depends(security)):
     pw = os.environ.get("ADMIN_PASSWORD") or os.environ.get("EZPLM_WEB_PASSWORD")
     if not pw:
