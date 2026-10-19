@@ -49,6 +49,9 @@ class Candidate:
 
 
 # --------------------------------------------------------------------------- 规则层
+_CAPACITY_RE = re.compile(r"\d+(?:\.\d+)?\s*[KMGk]i?[Bb]?(?:ytes?|its?)?\s*(?:主|of)?\s*(?:Flash|SRAM|PSRAM|DRAM|RAM|EEPROM|ROM|闪存|存储器?|内存)", re.I)
+
+
 class RuleEngine:
     def __init__(self, tax: Taxonomy, rules_path: str | Path = HERE / "config" / "rules.yaml"):
         self.tax = tax
@@ -75,10 +78,18 @@ class RuleEngine:
                 out.append(Candidate(cid, conf, "rule:mpn", {"pattern": mpn_re.pattern}))
                 break
         text = f"{p.description} {p.description_en} {p.mpn}"
+        # “128 KB Flash、32 KB SRAM”这类容量+存储词是器件的属性而不是器件类型，先去掉再匹配关键字
+        text_kw = _CAPACITY_RE.sub(" ", text)
+        hits = []
         for kw_re, ex_re, cid, conf in self.keyword:
-            if cid and kw_re.search(text) and not (ex_re and ex_re.search(text)):
-                out.append(Candidate(cid, conf, "rule:keyword", {"pattern": kw_re.pattern}))
-                break
+            if cid and kw_re.search(text_kw) and not (ex_re and ex_re.search(text_kw)):
+                hits.append((cid, conf, kw_re.pattern))
+        if hits:
+            cid, conf, pat = hits[0]
+            others = {c for c, _, _ in hits[1:] if c != cid}
+            if others:                                    # 多条规则指向不同分类：不自动改，降到复核/模型仲裁
+                conf = min(conf, 0.6)
+            out.append(Candidate(cid, conf, "rule:keyword", {"pattern": pat, "conflicts": [self.tax.path(c) for c in others]} if others else {"pattern": pat}))
         return out
 
     def symbol_consistent(self, p: Part, category_id: str) -> bool | None:

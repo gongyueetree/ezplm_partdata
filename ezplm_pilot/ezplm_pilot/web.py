@@ -141,16 +141,18 @@ JOBS = """{% extends "base" %}{% block body %}
 
 <div>
 <div class=panel><h2>当前任务 {% if busy %}<form class=inline method=post action="/jobs/stop"><button class=bad>停止</button></form>{% endif %}</h2>
-<div id=jobbox>{% if job %}<div><b>{{ job.id }}</b> <span class="status-{{ job.status }}">{{ job.status }}</span> · 进度 {{ job.progress.done }}{% if job.progress.total %} / {{ job.progress.total }}{% endif %}</div>
+<div id=jobbox>{% if job %}<div><b>{{ job.id }}</b> <span class="status-{{ job.status }}">{{ status_zh.get(job.status, job.status) }}</span>{% if job.status in ('running','queued') or job.progress.total %} · 进度 {{ job.progress.done }}{% if job.progress.total %} / {{ job.progress.total }}{% endif %}{% endif %}{% if job.finished_at %} · 结束于 {{ job.finished_at }}{% endif %}</div>
 <pre id=joblog>{{ job.log|join('\\n') }}</pre>{% else %}<p class=mute>无</p>{% endif %}</div></div>
 <div class=panel><h2>历史任务</h2>
 <table><tr><th>任务</th><th>状态</th><th>开始</th><th>结束</th><th>结果</th></tr>
-{% for h in history %}<tr><td>{{ h.id }}</td><td class="status-{{ h.status }}">{{ h.status }}</td><td class=mute>{{ h.started_at }}</td><td class=mute>{{ h.finished_at }}</td><td class=mute style="max-width:300px">{{ h.result }}</td></tr>{% endfor %}</table></div>
+{% for h in history %}<tr><td>{{ h.id }}</td><td class="status-{{ h.status }}">{{ status_zh.get(h.status, h.status) }}</td><td class=mute>{{ h.started_at }}</td><td class=mute>{{ h.finished_at }}</td><td class=mute style="max-width:300px">{{ h.result }}</td></tr>{% endfor %}</table></div>
 </div></div>
 {% endblock %}{% block script %}{% if busy %}<script>
-setInterval(async()=>{const r=await fetch('/api/jobs/current');const j=await r.json();if(!j){location.reload();return}
-document.getElementById('jobbox').innerHTML='<div><b>'+j.id+'</b> <span class="status-'+j.status+'">'+j.status+'</span> · 进度 '+j.progress.done+(j.progress.total?' / '+j.progress.total:'')+'</div><pre id=joblog>'+j.log.join('\\n').replace(/</g,'&lt;')+'</pre>';
-const p=document.getElementById('joblog');p.scrollTop=p.scrollHeight;if(j.status!=='running'&&j.status!=='queued'){setTimeout(()=>location.reload(),1500)}},2000);
+const ZH={queued:'排队中',running:'运行中',done:'已完成',failed:'失败',stopped:'已停止'};
+setInterval(async()=>{const r=await fetch('/api/jobs/current');const j=await r.json();if(!j){location.replace(location.pathname);return}
+const fin=j.status!=='running'&&j.status!=='queued';
+document.getElementById('jobbox').innerHTML='<div><b>'+j.id+'</b> <span class="status-'+j.status+'">'+(ZH[j.status]||j.status)+'</span>'+(fin&&!j.progress.total?'':' · 进度 '+j.progress.done+(j.progress.total?' / '+j.progress.total:''))+'</div><pre id=joblog>'+j.log.join('\\n').replace(/</g,'&lt;')+'</pre>';
+const p=document.getElementById('joblog');p.scrollTop=p.scrollHeight;if(fin){setTimeout(()=>location.replace(location.pathname),1500)}},2000);
 </script>{% endif %}{% endblock %}"""
 
 PARTS = """{% extends "base" %}{% block body %}
@@ -383,7 +385,8 @@ def jobs_page(request: Request, user: str = Depends(auth)):
     job = manager.current.to_dict() if manager.current else None
     sources = sorted(p.name for p in settings.SOURCES_DIR.iterdir() if p.is_dir()) if settings.SOURCES_DIR.exists() else []
     return render("jobs", request, title="任务控制", nav="jobs", user=user, s=pipeline.summary(), cfg=settings.get_all(), job=job,
-                  history=[h.to_dict() for h in manager.history], lib=_lib_stats(), sources=sources)
+                  history=[h.to_dict() for h in manager.history], lib=_lib_stats(), sources=sources,
+                  status_zh={"queued": "排队中", "running": "运行中", "done": "已完成", "failed": "失败", "stopped": "已停止"})
 
 
 def _run_ingest(job, source, batch, max_batches, reset, incremental=False):

@@ -124,17 +124,46 @@ def _sym_pins(sym, lib_index: dict | None = None) -> list:
     return pins
 
 
-def parse_symbol_lib(path: str | Path, source_kind: str = "community") -> Iterator[SymbolRec]:
+def _load_symbols(path: Path):
+    """读取一个 .kicad_sym 文件，kiutils 失败时用正则兜底（只取名字/extends/属性/管脚号）。"""
     from kiutils.symbol import SymbolLib
+    return SymbolLib.from_file(str(path)).symbols
+
+
+def parse_symbol_lib(path: str | Path, source_kind: str = "community") -> Iterator[SymbolRec]:
+    """解析一个 .kicad_sym 文件，或 KiCad 9+ 的 X.kicad_symdir 目录（每个符号一个文件，extends 跨文件）。"""
     path = Path(path)
-    lib = SymbolLib.from_file(str(path))
-    index = {s.entryName: s for s in lib.symbols}
-    lic, commit = _license_of(path.parent), _git_commit(path.parent)
-    for s in lib.symbols:
+    if path.is_dir():                                   # X.kicad_symdir：整个目录是一个库
+        lib_name = path.name[:-len(".kicad_symdir")] if path.name.endswith(".kicad_symdir") else path.stem
+        entries = []                                    # [(symbol, file)]
+        for f in sorted(path.glob("*.kicad_sym")):
+            try:
+                entries += [(s, f) for s in _load_symbols(f)]
+            except Exception:  # noqa
+                continue
+        lic, commit = _license_of(path), _git_commit(path)
+    else:
+        lib_name = path.stem
+        if path.parent.name.endswith(".kicad_symdir"):  # 单文件但位于 symdir 内：库名取目录名，extends 在同目录找
+            lib_name = path.parent.name[:-len(".kicad_symdir")]
+            entries = []
+            for f in sorted(path.parent.glob("*.kicad_sym")):
+                try:
+                    entries += [(s, f) for s in _load_symbols(f)]
+                except Exception:  # noqa
+                    continue
+            entries = [(s, f) for s, f in entries if f == path] + [(s, f) for s, f in entries if f != path]
+        else:
+            entries = [(s, path) for s in _load_symbols(path)]
+        lic, commit = _license_of(path.parent), _git_commit(path.parent)
+    index = {s.entryName: s for s, _ in entries}
+    for s, f in entries:
+        if not path.is_dir() and f != path:
+            continue
         props = _sym_props(s)
         pins = _sym_pins(s, index)
         yield SymbolRec(
-            name=s.entryName, lib=path.stem, source=str(path), source_kind=source_kind, license=lic,
+            name=s.entryName, lib=lib_name, source=str(f), source_kind=source_kind, license=lic,
             extends=s.extends or "", pins=pins, pin_count=len({p[0] for p in pins}),
             footprint_field=props.get("Footprint", ""), datasheet=props.get("Datasheet", ""),
             keywords=props.get("ki_keywords", ""), description=props.get("Description", "") or props.get("ki_description", ""),
@@ -225,7 +254,11 @@ def scan(root: str | Path, source_kind: str = "community") -> dict:
     res = {"symbols": [], "footprints": [], "instances": [], "errors": []}
     for p in root.rglob("*"):
         try:
-            if p.suffix == ".kicad_sym":
+            if p.is_dir() and p.name.endswith(".kicad_symdir"):
+                res["symbols"] += list(parse_symbol_lib(p, source_kind))
+            elif p.suffix == ".kicad_sym":
+                if p.parent.name.endswith(".kicad_symdir"):
+                    continue                                # 已随目录整体解析
                 res["symbols"] += list(parse_symbol_lib(p, source_kind))
             elif p.suffix == ".kicad_mod":
                 res["footprints"].append(parse_footprint(p, source_kind))
@@ -319,7 +352,7 @@ class LibIndex:
 
     def facets(self, kind: str):
         t, mt, key = ("symbols", "symbol_mpns", "symbol_id") if kind == "symbols" else ("footprints", "footprint_mpns", "footprint_id")
-        libs = [r[0] for r in self.con.execute(f"select lib from {t} group by lib order by count(*) desc limit 200")]
+        libs = [r[0] for r in self.con.execute(f"select lib from {t} where lib<>'' group by lib order by lib limit 1000")]
         kinds = [r[0] for r in self.con.execute(f"select source_kind from {t} group by source_kind")]
         n_with = self.con.execute(f"select count(*) from {t} where exists(select 1 from {mt} m where m.{key}={t}.rowid)").fetchone()[0]
         n_total = self.con.execute(f"select count(*) from {t}").fetchone()[0]
