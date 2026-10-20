@@ -102,6 +102,9 @@ python -m ezplm_pilot.cli ihs-match                                  # 给已处
 - **建议**：`description_en`（英文描述填空，L1/L2 自动写入）、`footprint`（IHS 封装描述 → KiCad 封装，进复核）、`manufacturer`（空厂商补全进复核；旧厂商名打"厂商已并购"标签，回写只填空，不会覆盖）
 - **物料详情页**的"IHS 参考"面板列出同型号的 IHS 记录：匹配级别、谱系、分类、封装、2012 年状态、全部参数
 - 生命周期和数据手册链接是 2012 年的数据，只展示不出建议；IHS 数据的使用请先确认授权
+- **IHS 参数**（`ezplm_pilot/ihs_params.py`）：每个分类调用一次大模型，生成"IHS 参数列 → 该分类关键参数"的映射表（含单位换算、枚举对应），
+  在 分类 → IHS 映射 页预览、修改、确认后，由规则给该分类所有可靠匹配（L1–L3）的物料写参数（`part_params` 表，可导出 CSV）。
+  任务控制里可按分类路径批量生成试点分类的映射草稿。参数暂不回写 ezPLM（需后端支持物料属性）
 - **新增候选** `cli ihs-candidates --dir <IHS数据目录>`：IHS 里 2012 年仍在产、不是电源模块/军标图号、ezPLM 里还没有的 IC 型号（同型号+同当前厂商只留一条）→
   `out/ihs_candidates.csv`（约 110 万行，超过 Excel 行数上限，请用脚本/数据库打开）、`ihs_candidates_summary.csv`（按大类/分类/厂商统计）、
   `ihs_candidates_sample500.csv`（固定随机种子抽样，带 DigiKey/Mouser 查询链接和"当前状态"空列，人工核对后可估算 14 年后的仍有效比例）

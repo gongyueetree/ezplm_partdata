@@ -196,28 +196,31 @@ class LlmArbiter:
         self.n_errors = 0
         self.last_error = ""
 
-    def _anthropic_call(self, prompt: str) -> str:
+    def _anthropic_call(self, prompt: str, max_tokens: int = 300) -> str:
         import anthropic
         client = anthropic.Anthropic()
-        msg = client.messages.create(model=self.model, max_tokens=300, messages=[{"role": "user", "content": prompt}])
+        msg = client.messages.create(model=self.model, max_tokens=max_tokens, messages=[{"role": "user", "content": prompt}])
         return msg.content[0].text
 
-    def _gemini_call(self, prompt: str) -> str:
-        """Google Gemini（REST，无需额外 SDK）。模型如 gemini-2.5-flash / gemini-2.5-flash-lite。"""
+    def _gemini_call(self, prompt: str, max_tokens: int = 300) -> str:
+        """Google Gemini（REST，无需额外 SDK）。模型如 gemini-2.5-flash / gemini-2.5-flash-lite。
+        max_tokens 大于默认值时（如字段映射要输出整张表）关闭 2.5 Flash 的思考：思考 token 也计入输出上限，会把 JSON 截断。"""
         import requests
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
-        r = requests.post(url, params={"key": os.environ["GEMINI_API_KEY"]}, timeout=60,
-                          json={"contents": [{"parts": [{"text": prompt}]}],
-                                "generationConfig": {"temperature": 0, "maxOutputTokens": 300, "responseMimeType": "application/json"}})
+        gen = {"temperature": 0, "maxOutputTokens": max_tokens, "responseMimeType": "application/json"}
+        if max_tokens > 300 and "2.5" in self.model and "flash" in self.model:
+            gen["thinkingConfig"] = {"thinkingBudget": 0}
+        r = requests.post(url, params={"key": os.environ["GEMINI_API_KEY"]}, timeout=120,
+                          json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": gen})
         r.raise_for_status()
         return r.json()["candidates"][0]["content"]["parts"][0]["text"]
 
-    def _openai_call(self, prompt: str) -> str:
+    def _openai_call(self, prompt: str, max_tokens: int = 300) -> str:
         """OpenAI 兼容接口（OpenAI / DeepSeek / 通义千问 / 智谱等），可设 OPENAI_BASE_URL。"""
         import requests
         base = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
         r = requests.post(f"{base}/chat/completions", headers={"Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"}, timeout=60,
-                          json={"model": self.model, "temperature": 0, "max_tokens": 300, "messages": [{"role": "user", "content": prompt}]})
+                          json={"model": self.model, "temperature": 0, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}]})
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
 

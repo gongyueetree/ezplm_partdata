@@ -180,6 +180,15 @@ JOBS = """{% extends "base" %}{% block body %}
 <label><input type=checkbox name=all value=1> 也检查 IHS 无记录的物料的厂商名（提示已被并购的旧厂商名）</label>
 <p><button class=pri {{ 'disabled' if busy or not ihs_n }}>补跑 IHS 匹配</button></p></form></div>
 
+<div class=panel><h2>IHS 参数（试点）</h2>
+<p class=mute>按分类让模型生成"IHS 参数列 → 关键参数"映射（每个分类调用一次），到 分类 → IHS 映射 页人工确认后，再写参数。
+映射：草稿 {{ imap.get('draft', 0) }} / 已确认 {{ imap.get('approved', 0) }}；已写参数 {{ n_pparams }} 个。</p>
+<form class=frm method=post action="/jobs/start"><input type=hidden name=kind value=ihs-maps>
+<div class=row><div><label>分类路径（正则）</label><input name=path_re value="放大器|稳压器|电压基准|比较器|微控制器" style="width:100%"></div>
+<div><label>至少多少条可靠 IHS 匹配</label><input name=min_parts value="20"></div></div>
+<p><button class=pri {{ 'disabled' if busy }}>为这些分类生成映射草稿</button> <span class=mute>已有映射的分类跳过</span></p></form>
+<form class=inline method=post action="/jobs/start"><input type=hidden name=kind value=ihs-params><button {{ 'disabled' if busy or not imap.get('approved') }}>按全部已确认映射写参数</button></form></div>
+
 <div class=panel><h2>④ 回写 ezPLM（export）</h2>
 <form class=frm method=post action="/jobs/start"><input type=hidden name=kind value=export>
 <p><button {{ 'disabled' if busy }}>生成回写包（不写 ezPLM）</button> <a class=btn href="/export">查看 / 下载 / 正式回写 →</a></p></form></div>
@@ -242,6 +251,8 @@ PART = """{% extends "base" %}{% block topright %}<span class=mute>{{ p.manufact
 <div class=row><div><label>英文描述</label><input name=new_description_en value="{{ p.new_description_en or '' }}"></div><div><label>制造商（只填空，不覆盖 ezPLM 已有值）</label><input name=new_manufacturer value="{{ p.new_manufacturer or '' }}"></div></div>
 <label>标签（逗号分隔）</label><input name=tags value="{{ p.tags or '' }}" style="width:100%">
 <p><button class=pri>保存</button> <button name=reprocess value=1>保存并标记为待重新处理</button></p></form></div></div>
+{% if pparams %}<div class=panel><h2>参数 <span class=mute style="font-weight:400">来自 IHS 映射（2012 年数据，未回写 ezPLM）</span></h2>
+<table><tr><th>参数</th><th>值</th><th>来源</th></tr>{% for pp in pparams %}<tr><td>{{ pnames.get(pp.key, pp.key) }}</td><td><b>{{ pp.value }}</b></td><td class=mute>{{ pp.detail }}</td></tr>{% endfor %}</table></div>{% endif %}
 <div class=panel><h2>IHS 参考 <span class=mute style="font-weight:400">2011-12 ~ 2012-02 快照 · 同型号 {{ ihs.total or 0 }} 条</span></h2>
 {% if ihs.rows %}<div style="overflow-x:auto"><table><tr><th>匹配</th><th>置信度</th><th>IHS 型号</th><th>IHS 厂商 → 当前归属</th><th>IHS 分类</th><th>描述</th><th>封装</th><th>状态（2012）</th><th>参数</th></tr>
 {% for x in ihs.rows %}<tr class="{{ 'new' if x.r.objid == p.ihs_objid }}">
@@ -292,7 +303,7 @@ REVIEW = """{% extends "base" %}{% block body %}
 CATEGORIES = """{% extends "base" %}{% block topright %}<form class=inline method=post action="/jobs/start"><input type=hidden name=kind value=params><button {{ 'disabled' if busy }}>让模型为所有叶子分类生成（跳过已有）</button></form> <form class=inline method=post action="/categories/seed"><button class=pri>挂载内置参数建议（补齐缺失）</button></form> <form class=inline method=post action="/categories/seed?replace=1" onsubmit="return confirm('用最新内置模板刷新所有“内置建议”来源的参数？人工/模型参数不受影响。')"><button>刷新内置建议</button></form> <a class=btn href="/categories/params.json">导出全部参数 JSON</a>{% endblock %}{% block body %}
 <p class=mute>括号内：原分类物料数 / 新分类物料数。"关键参数（N）"点击进入编辑；已有 {{ n_with }} 个分类配置了参数（内置建议 {{ n_seed }} 个，人工/模型 {{ n_with - n_seed }} 个）。内置建议在拉取分类树后自动挂上，可直接编辑；编辑保存后来源变为“人工”，不会再被内置模板覆盖。</p>
 <div class="panel tree">{% macro node(n) %}<li>{{ n.name }} <span class=cnt>({{ counts.get(n.id, 0) }} / {{ ncounts.get(n.id, 0) }})</span>
- <a href="/categories/{{ n.id }}/params" style="margin-left:8px;color:{{ '#9ca3af' if not pcounts.get(n.id) else ('#059669' if pseed.get(n.id) else '#2563eb') }}">关键参数（{{ pcounts.get(n.id, 0) }}）</a>{% if n.children %}<ul>{% for c in n.children %}{{ node(c) }}{% endfor %}</ul>{% endif %}</li>{% endmacro %}
+ <a href="/categories/{{ n.id }}/params" style="margin-left:8px;color:{{ '#9ca3af' if not pcounts.get(n.id) else ('#059669' if pseed.get(n.id) else '#2563eb') }}">关键参数（{{ pcounts.get(n.id, 0) }}）</a>{% if not n.children %} <a href="/categories/{{ n.id }}/ihs-map" style="margin-left:6px;color:{{ {'approved': '#059669', 'draft': '#d97706'}.get(imaps.get(n.id), '#9ca3af') }}">IHS 映射{{ {'approved': '（已确认）', 'draft': '（草稿）'}.get(imaps.get(n.id), '') }}</a>{% endif %}{% if n.children %}<ul>{% for c in n.children %}{{ node(c) }}{% endfor %}</ul>{% endif %}</li>{% endmacro %}
 <ul>{% for r in roots %}{{ node(r) }}{% endfor %}</ul></div>
 {% endblock %}"""
 
@@ -315,6 +326,31 @@ PARAMS = """{% extends "base" %}{% block topright %}<a class=btn href="/categori
 {% if not llm_ok %}<span class=mute>（设置里配置 LLM 后可用）</span>{% endif %}</p></form>
 <template id=rowtpl><tr><td><input name=name style="width:190px"></td><td><input name=key style="width:120px"></td><td><select name=ptype>{% for k,l in ptypes.items() %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></td><td><input name=unit style="width:60px"></td><td><input name=vmin style="width:90px" placeholder="最小"> – <input name=vmax style="width:90px" placeholder="最大"><br><input name=values style="width:200px;margin-top:3px" placeholder="多选一的取值"></td><td><select name=priority>{% for k,l in prios.items() %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></td><td class=mute><input type=hidden name=source value=manual>人工</td><td><button type=button onclick="this.closest('tr').remove()">✕</button></td></tr></template>
 <script>function addRow(){document.getElementById('ptable').appendChild(document.getElementById('rowtpl').content.cloneNode(true))}</script>
+{% endblock %}"""
+
+IHSMAP = """{% extends "base" %}{% block topright %}<a class=btn href="/categories">← 返回分类树</a>{% endblock %}{% block body %}
+<p class=mute>{{ path }} · 可靠匹配到 IHS（L1–L3）的物料 {{ prof.n_parts }} 条 · IHS 子类：{% for c, n in prof.ihs_categories %}{{ c }}（{{ n }}）{% if not loop.last %}、{% endif %}{% endfor %}</p>
+<p>状态：{% if not row %}<b>尚未生成</b>{% elif row.status == 'approved' %}<b style="color:var(--ok)">已确认</b>（{{ row.approved_by }}）{% else %}<b style="color:var(--warn)">草稿，待确认</b>{% endif %}
+{% if row and row.applied_at %} · 已应用到 {{ row.applied_parts }} 个物料（{{ row.applied_at }}）{% endif %}{% if row and row.model %} · 模型 {{ row.model }}{% endif %}</p>
+{% if not tgts %}<div class="msg err">该分类还没有关键参数：先到 <a href="/categories/{{ cid }}/params">关键参数</a> 挂上内置参数或让模型生成。</div>{% endif %}
+<div class=filters>
+<form class=inline method=post action="/categories/{{ cid }}/ihs-map/suggest"><button class=pri {{ 'disabled' if not llm_ok or not tgts or not prof.n_parts }}>{{ '让模型重新生成' if row else '让模型生成映射' }}</button></form>
+{% if row and row.status != 'approved' %}<form class=inline method=post action="/categories/{{ cid }}/ihs-map/approve" onsubmit="return confirm('确认这张映射表？确认后才能应用到物料。')"><button class=ok>确认映射</button></form>{% endif %}
+{% if row and row.status == 'approved' %}<form class=inline method=post action="/categories/{{ cid }}/ihs-map/apply"><button class=ok {{ 'disabled' if busy }}>应用到物料（写参数）</button></form>
+<a class=btn href="/categories/{{ cid }}/part-params.csv">导出参数 CSV</a>{% endif %}
+{% if not llm_ok %}<span class=mute>（设置里配置 LLM 后可生成）</span>{% endif %}</div>
+{% if mapping %}<h2>映射表</h2>
+<table><tr><th>ezPLM 参数</th><th>单位</th><th>方式</th><th>IHS 列</th><th>换算</th><th>取值对应</th><th>说明</th></tr>
+{% for m in mapping %}<tr class="{{ 'mute' if m.kind == 'none' }}"><td><b>{{ names.get(m.target, m.target) }}</b><br><span class=mute>{{ m.target }}</span></td><td>{{ units.get(m.target, '') }}</td><td>{{ m.kind }}</td>
+<td>{% if m.kind == 'range' %}{{ m.min }} ~ {{ m.max }}{% else %}{{ m.source or '' }}{% endif %}</td><td>{% if m.scale and m.scale != 1 %}× {{ m.scale }}{% endif %}</td>
+<td class=mute style="max-width:220px">{% for k, v in (m.value_map or {}).items() %}{{ k }}→{{ v }}{% if not loop.last %}，{% endif %}{% endfor %}</td><td class=mute>{{ m.note }}</td></tr>{% endfor %}</table>
+<h2>预览（前 {{ prev|length }} 个物料，按当前映射算出的值）</h2>
+<div style="overflow-x:auto"><table><tr><th>型号</th>{% for m in mapping if m.kind != 'none' %}<th>{{ names.get(m.target, m.target) }}</th>{% endfor %}</tr>
+{% for r in prev %}<tr><td><a href="/parts/{{ r.part_id }}">{{ r.mpn }}</a> <span class=mute>{{ r.level }}</span></td>{% for m in mapping if m.kind != 'none' %}<td>{{ r['values'].get(m.target, '') }}</td>{% endfor %}</tr>{% endfor %}</table></div>
+<h2>手工修改（JSON）</h2><p class=mute>改完保存会变回草稿，需要重新确认。kind：number / range / enum / bool / text / none；scale 是 IHS 数值换算到 ezPLM 单位要乘的系数。</p>
+<form method=post action="/categories/{{ cid }}/ihs-map/save"><textarea name=mapping_json style="width:100%;height:280px;font-family:ui-monospace,Menlo,monospace;font-size:12px">{{ mapping_text }}</textarea><p><button>保存为草稿</button></p></form>{% endif %}
+<h2>IHS 参数列（覆盖率 ≥ 5%）</h2><table><tr><th>列</th><th>覆盖率</th><th>不同取值</th><th>常见值</th></tr>
+{% for c in prof.columns if c.coverage >= 0.05 %}<tr><td>{{ c.column }}</td><td>{{ '%.0f'|format(c.coverage * 100) }}%</td><td>{{ c.distinct }}</td><td class=mute>{{ c.samples|join(', ') }}</td></tr>{% endfor %}</table>
 {% endblock %}"""
 
 LIBRARY = """{% extends "base" %}{% block topright %}<a class=btn href="/library/upload">导入符号 / 封装 / 工程</a>{% endblock %}{% block body %}
@@ -405,7 +441,7 @@ SETTINGS = """{% extends "base" %}{% block body %}
 {% endblock %}"""
 
 env = Environment(loader=DictLoader({"base": BASE, "home": HOME, "jobs": JOBS, "parts": PARTS, "part": PART, "review": REVIEW,
-                                     "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS}), autoescape=True)
+                                     "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS, "ihsmap": IHSMAP}), autoescape=True)
 env.globals["pct"] = lambda a, b: round(100.0 * (a or 0) / b, 1) if b else 0
 
 
@@ -450,7 +486,12 @@ def jobs_page(request: Request, user: str = Depends(auth)):
     job = manager.current.to_dict() if manager.current else None
     sources = sorted(p.name for p in settings.SOURCES_DIR.iterdir() if p.is_dir()) if settings.SOURCES_DIR.exists() else []
     from .ihs import IhsMatcher
-    return render("jobs", request, title="任务控制", nav="jobs", user=user, s=pipeline.summary(), cfg=settings.get_all(), job=job, ihs_n=IhsMatcher.n_ref(get_session()),
+    from .staging import IhsParamMap, PartParam
+    dbj = get_session()
+    imap = dict(dbj.execute(select(IhsParamMap.status, func.count()).group_by(IhsParamMap.status)).all())
+    n_pparams = dbj.execute(select(func.count(PartParam.id))).scalar() or 0
+    return render("jobs", request, title="任务控制", nav="jobs", user=user, s=pipeline.summary(), cfg=settings.get_all(), job=job, ihs_n=IhsMatcher.n_ref(dbj),
+                  imap=imap, n_pparams=n_pparams,
                   history=[h.to_dict() for h in manager.history], lib=_lib_stats(), sources=sources,
                   status_zh={"queued": "排队中", "running": "运行中", "done": "已完成", "failed": "失败", "stopped": "已停止"})
 
@@ -519,6 +560,17 @@ async def jobs_start(request: Request, user: str = Depends(auth)):
             if not f.get("path"):
                 return back("/jobs", "请填写仓库地址或目录", True)
             manager.start("scan", lambda j: _run_scan(j, f["path"].strip(), f.get("source_kind", "community")), {"path": f["path"], "kind": f.get("source_kind")})
+        elif kind == "ihs-maps":
+            from . import ihs_params as IP
+            call = _llm_call_or_none()
+            if not call:
+                return back("/jobs", "请先在设置里配置 LLM", True)
+            path_re, mp = (f.get("path_re") or "").strip() or ".", int(f.get("min_parts") or 20)
+            manager.start("ihs-maps", lambda j: IP.bulk_suggest(call, path_re, mp, model=settings.get("llm_model"), stop=j.should_stop, log=j.say,
+                                                                progress=lambda p: j.progress.update(p)), {"path_re": path_re, "min_parts": mp})
+        elif kind == "ihs-params":
+            from . import ihs_params as IP
+            manager.start("ihs-params", lambda j: IP.bulk_apply(stop=j.should_stop, log=j.say, progress=lambda p: j.progress.update(p)), {})
         elif kind == "ihs":
             manager.start("ihs", lambda j: _run_ihs(j, bool(f.get("all"))), {"all": bool(f.get("all"))})
         elif kind == "export":
@@ -600,8 +652,14 @@ def part(request: Request, pid: str, user: str = Depends(auth)):
     props = db.execute(select(StagedProposal).where(StagedProposal.part_id == pid).order_by(StagedProposal.field, StagedProposal.confidence.desc())).scalars().all()
     tax = pipeline.load_taxonomy(db)
     from .ihs import IhsMatcher, reference_rows
+    from .staging import PartParam
+    pparams = db.execute(select(PartParam).where(PartParam.part_id == pid).order_by(PartParam.id)).scalars().all()
+    pnames = {}
+    if pparams:
+        from . import ihs_params as IP
+        pnames = {t["key"]: t["name"] for t in IP.targets(db, pparams[0].category_id)}
     return render("part", request, title=p.mpn, nav="parts", user=user, p=p, props=props, tax=tax, leaves=tax.leaf_labels(),
-                  ihs=reference_rows(db, p, tax), ihs_n=IhsMatcher.n_ref(db))
+                  ihs=reference_rows(db, p, tax), ihs_n=IhsMatcher.n_ref(db), pparams=pparams, pnames=pnames)
 
 
 @app.post("/parts/{pid}/edit")
@@ -703,7 +761,9 @@ def categories(request: Request, user: str = Depends(auth)):
         n = tax.nodes[nid]
         return {"name": n.name, "id": n.id, "children": [build(c) for c in n.children]}
     roots = [build(n.id) for n in tax.nodes.values() if not n.parent]
-    return render("categories", request, title="分类与关键参数", nav="categories", user=user, roots=roots, counts=counts, ncounts=ncounts, pcounts=pcounts, pseed=pseed, n_with=len(pcounts), n_seed=len(pseed))
+    from .staging import IhsParamMap
+    imaps = dict(db.execute(select(IhsParamMap.category_id, IhsParamMap.status)).all())
+    return render("categories", request, title="分类与关键参数", nav="categories", user=user, roots=roots, counts=counts, ncounts=ncounts, pcounts=pcounts, pseed=pseed, n_with=len(pcounts), n_seed=len(pseed), imaps=imaps)
 
 
 @app.post("/categories/seed")
@@ -765,6 +825,103 @@ def params_page(request: Request, cid: str, user: str = Depends(auth)):
 
 
 _SUGGEST_CACHE: dict = {}
+
+
+# ---- IHS 参数映射（分类级）
+@app.get("/categories/{cid}/ihs-map", response_class=HTMLResponse)
+def ihs_map_page(request: Request, cid: str, user: str = Depends(auth)):
+    from . import ihs_params as IP
+    from .staging import IhsParamMap
+    db = get_session()
+    tax = pipeline.load_taxonomy(db)
+    if cid not in tax.nodes:
+        raise HTTPException(404)
+    row = db.get(IhsParamMap, cid)
+    mapping = json.loads(row.mapping_json) if row and row.mapping_json else []
+    tgts = IP.targets(db, cid)
+    return render("ihsmap", request, title=f"IHS 参数映射 · {tax.nodes[cid].name}", nav="categories", user=user, cid=cid, path=tax.path(cid),
+                  row=row, mapping=mapping, mapping_text=json.dumps(mapping, ensure_ascii=False, indent=1), tgts=tgts,
+                  names={t["key"]: t["name"] for t in tgts}, units={t["key"]: t["unit"] for t in tgts},
+                  prof=IP.profile(db, cid), prev=IP.preview(db, cid, mapping) if mapping else [], llm_ok=_llm_call_or_none() is not None)
+
+
+@app.post("/categories/{cid}/ihs-map/suggest")
+def ihs_map_suggest(cid: str, user: str = Depends(auth)):
+    from . import ihs_params as IP
+    call = _llm_call_or_none()
+    if not call:
+        return back(f"/categories/{cid}/ihs-map", "请先在设置里配置 LLM", True)
+    db = get_session()
+    try:
+        IP.suggest(db, pipeline.load_taxonomy(db), cid, call, model=settings.get("llm_model"))
+    except Exception as e:  # noqa
+        return back(f"/categories/{cid}/ihs-map", f"生成失败：{str(e)[:200]}", True)
+    return back(f"/categories/{cid}/ihs-map", "已生成映射草稿，请检查后确认")
+
+
+@app.post("/categories/{cid}/ihs-map/save")
+async def ihs_map_save(request: Request, cid: str, user: str = Depends(auth)):
+    from . import ihs_params as IP
+    from .staging import IhsParamMap
+    f = await request.form()
+    db = get_session()
+    try:
+        prof = IP.profile(db, cid)
+        mapping = IP.parse_mapping(f.get("mapping_json") or "", IP.targets(db, cid), {c["column"] for c in prof["columns"]})
+    except Exception as e:  # noqa
+        return back(f"/categories/{cid}/ihs-map", f"JSON 有误：{str(e)[:200]}", True)
+    row = db.get(IhsParamMap, cid) or IhsParamMap(category_id=cid, n_parts=prof["n_parts"], model="manual")
+    row.mapping_json, row.status, row.approved_by, row.updated_at = json.dumps(mapping, ensure_ascii=False), "draft", None, datetime.utcnow()
+    db.merge(row)
+    db.commit()
+    return back(f"/categories/{cid}/ihs-map", "已保存为草稿（引用了不存在的列的项已置为 none）")
+
+
+@app.post("/categories/{cid}/ihs-map/approve")
+def ihs_map_approve(cid: str, user: str = Depends(auth)):
+    from .staging import IhsParamMap
+    db = get_session()
+    row = db.get(IhsParamMap, cid)
+    if not row:
+        raise HTTPException(404)
+    row.status, row.approved_by = "approved", user
+    db.commit()
+    return back(f"/categories/{cid}/ihs-map", "已确认，可以应用到物料")
+
+
+@app.post("/categories/{cid}/ihs-map/apply")
+def ihs_map_apply(cid: str, user: str = Depends(auth)):
+    from . import ihs_params as IP
+    from .staging import get_session as new_session
+    def run(j):
+        db = new_session()
+        try:
+            return IP.apply(db, cid, log=j.say)
+        finally:
+            db.close()
+    try:
+        manager.start("ihs-params", run, {"category": cid})
+    except RuntimeError as e:
+        return back(f"/categories/{cid}/ihs-map", str(e), True)
+    return back("/jobs", "已启动：按映射给该分类物料写参数")
+
+
+@app.get("/categories/{cid}/part-params.csv")
+def part_params_csv(cid: str, user: str = Depends(auth)):
+    import csv, io
+    from . import ihs_params as IP
+    from .staging import PartParam
+    db = get_session()
+    names = {t["key"]: t["name"] for t in IP.targets(db, cid)}
+    rows = db.execute(select(StagedPart.id, StagedPart.mpn, StagedPart.manufacturer, PartParam.key, PartParam.value, PartParam.num, PartParam.unit, PartParam.detail)
+                      .join(PartParam, PartParam.part_id == StagedPart.id).where(PartParam.category_id == cid).order_by(StagedPart.mpn, PartParam.key)).all()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["part_id", "mpn", "manufacturer", "param_key", "param_name", "value", "number", "unit", "source"])
+    for pid, mpn, mf, k, v, num, unit, det in rows:
+        w.writerow([pid, mpn, mf, k, names.get(k, k), v, "" if num is None else num, unit, det])
+    return HTMLResponse("\ufeff" + buf.getvalue(), media_type="text/csv",
+                        headers={"Content-Disposition": f"attachment; filename=part_params_{cid}.csv"})
 
 
 @app.post("/categories/{cid}/params")

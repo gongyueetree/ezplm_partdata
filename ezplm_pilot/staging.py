@@ -134,6 +134,38 @@ class IhsRef(Base):
     batch = Column(String(10))                         # 数据批次日期
 
 
+class IhsParamMap(Base):
+    """某个 ezPLM 分类的 "IHS 参数列 → 关键参数" 映射（模型生成草稿，人工确认后才用于填参数）。"""
+    __tablename__ = "ihs_param_maps"
+    category_id = Column(String(40), primary_key=True)
+    mapping_json = Column(Text)                        # [{target, kind, source|min|max, scale, value_map, note}]
+    status = Column(String(10), default="draft")       # draft / approved
+    n_parts = Column(Integer)                          # 生成时该分类有可靠 IHS 匹配的物料数
+    model = Column(String(60))
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    approved_by = Column(String(60))
+    applied_at = Column(DateTime)
+    applied_parts = Column(Integer)
+
+
+class PartParam(Base):
+    """物料参数值（目前来源：IHS 映射）。回写 ezPLM 需后端支持物料属性；先在平台展示与导出。"""
+    __tablename__ = "part_params"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    part_id = Column(String(40), index=True)
+    category_id = Column(String(40), index=True)
+    key = Column(String(80))
+    value = Column(String(200))                        # 展示值（含单位换算后的数值 / 范围 / 枚举）
+    num = Column(Float)                                # 单值数值（目标单位），范围取上限；便于筛选
+    unit = Column(String(30))
+    source = Column(String(20))                        # ihs
+    detail = Column(String(200))                       # 来源细节：匹配级别、IHS Objectid、原始列
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+Index("ix_part_params_cat_key", PartParam.category_id, PartParam.key)
+
+
 class SyncState(Base):
     __tablename__ = "sync_state"
     key = Column(String(60), primary_key=True)         # ingest:cursor / ingest:page / process:last_id ...
