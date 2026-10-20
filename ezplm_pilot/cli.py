@@ -17,7 +17,8 @@ python -m ezplm_pilot.cli export   [--apply]                                    
 python -m ezplm_pilot.cli status                                                          # 进度一览
 python -m ezplm_pilot.cli ihs-load --dir <IHS数据目录> [--families _IC]                    # 本地导入 IHS 参考数据（型号与暂存库相同的记录）
 python -m ezplm_pilot.cli ihs-match                                                       # 只跑 IHS 模块，给已处理物料补出建议
-python -m ezplm_pilot.cli ihs-candidates --dir <IHS数据目录> [--sample 500]                 # IHS 有、ezPLM 没有的在产 IC → out/ihs_candidates*.csv
+python -m ezplm_pilot.cli ihs-candidates --dir <IHS数据目录> [--sample 500] [--exclude-mfr X]   # IHS 有、ezPLM 没有的在产 IC → out/ihs_candidates*.csv
+python -m ezplm_pilot.cli ihs-candidates --from-csv out/ihs_candidates.csv --exclude-mfr X  # 不连库，从已导出的候选重新抽样
 python -m ezplm_pilot.cli dedupe                                                          # 作废重复的待复核建议
 暂存库默认 ./staging.sqlite，可设 EZPLM_STAGING_DB=postgresql://user:pw@host/db
 
@@ -182,9 +183,14 @@ def cmd_ihs_match(a):
 
 
 def cmd_ihs_candidates(a):
-    from .ihs import candidates
-    print(json.dumps(candidates(a.dir, a.out or OUT, sample=a.sample, seed=a.seed, workers=a.workers, allow_empty=a.allow_empty),
-                     ensure_ascii=False, indent=1))
+    from .ihs import candidates, resample_candidates
+    if a.from_csv:
+        res = resample_candidates(a.from_csv, a.out or OUT, sample=a.sample, seed=a.seed, exclude_mfrs=a.exclude_mfr)
+    elif a.dir:
+        res = candidates(a.dir, a.out or OUT, sample=a.sample, seed=a.seed, workers=a.workers, allow_empty=a.allow_empty, exclude_mfrs=a.exclude_mfr)
+    else:
+        raise SystemExit("需要 --dir（扫描 IHS + 连库）或 --from-csv（从已导出的候选 CSV 重新抽样）")
+    print(json.dumps(res, ensure_ascii=False, indent=1))
 
 
 def cmd_dedupe(a):
@@ -220,7 +226,7 @@ def main(argv=None):
     s = sub.add_parser("status"); s.set_defaults(fn=cmd_status)
     s = sub.add_parser("ihs-load"); s.add_argument("--dir", required=True, help="含 2011-12-09 - Initial Load 等批次子目录的 IHS 数据目录"); s.add_argument("--families", default="", help="整类导入的 IHS 大类正则，如 _IC"); s.add_argument("--workers", type=int); s.add_argument("--start", type=int, default=1, help="从第几个文件开始（日志 [i/93] 编号），中断后续跑"); s.set_defaults(fn=cmd_ihs_load)
     s = sub.add_parser("ihs-match"); s.add_argument("--batch", type=int, default=500); s.add_argument("--all", action="store_true", help="也对 IHS 无记录的物料做厂商谱系提示"); s.set_defaults(fn=cmd_ihs_match)
-    s = sub.add_parser("ihs-candidates"); s.add_argument("--dir", required=True); s.add_argument("--out", help="输出目录（默认 out/）"); s.add_argument("--sample", type=int, default=500); s.add_argument("--seed", type=int, default=42, help="抽样随机种子（固定则每次抽到同一批）"); s.add_argument("--workers", type=int); s.add_argument("--allow-empty", action="store_true", help="暂存库物料很少时也继续（本地测试用）"); s.set_defaults(fn=cmd_ihs_candidates)
+    s = sub.add_parser("ihs-candidates"); s.add_argument("--dir"); s.add_argument("--from-csv", help="从已导出的 ihs_candidates.csv 重新抽样/统计，不连库"); s.add_argument("--exclude-mfr", action="append", default=[], help="排除的厂商（当前厂商或 IHS 原名），可重复，如 --exclude-mfr 'DATA DEVICE CORP'"); s.add_argument("--out", help="输出目录（默认 out/）"); s.add_argument("--sample", type=int, default=500); s.add_argument("--seed", type=int, default=42, help="抽样随机种子（固定则每次抽到同一批）"); s.add_argument("--workers", type=int); s.add_argument("--allow-empty", action="store_true", help="暂存库物料很少时也继续（本地测试用）"); s.set_defaults(fn=cmd_ihs_candidates)
     s = sub.add_parser("dedupe"); s.set_defaults(fn=cmd_dedupe)
     s = sub.add_parser("serve"); s.add_argument("--host", default="0.0.0.0"); s.add_argument("--port", type=int, default=8080); s.set_defaults(fn=cmd_serve)
 

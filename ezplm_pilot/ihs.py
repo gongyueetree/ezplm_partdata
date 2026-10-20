@@ -263,14 +263,66 @@ def _parse_ic_active(path: str) -> list[tuple]:
     return out
 
 
+def _mfr_excluder(names, lin: "Lineage"):
+    """--exclude-mfr：按当前厂商或 IHS 原厂商名匹配（大小写、INC/CORP 等后缀不敏感）。"""
+    keys = {mfr_key(lin.canonical(n)) for n in (names or []) if n.strip()} | {mfr_key(n) for n in (names or []) if n.strip()}
+    return lambda r: bool(keys) and (mfr_key(r["manufacturer_current"]) in keys or mfr_key(r["manufacturer_ihs"]) in keys)
+
+
+def _write_candidate_outputs(rows: list[dict], out_dir: Path, sample: int, seed: int, write_full: bool = True) -> dict:
+    """写 ihs_candidates.csv（write_full 时）、抽样文件、统计文件，返回各文件路径。"""
+    import random
+    from collections import Counter
+    from urllib.parse import quote
+    out: dict = {}
+    if write_full:
+        path = out_dir / "ihs_candidates.csv"
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:      # utf-8-sig：Excel 直接打开不乱码
+            w = csv.DictWriter(f, fieldnames=CAND_COLUMNS)
+            w.writeheader()
+            w.writerows(rows)
+        out["csv"] = str(path)
+    picked = random.Random(seed).sample(rows, min(sample, len(rows)))
+    spath = out_dir / f"ihs_candidates_sample{len(picked)}.csv"
+    with open(spath, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=SAMPLE_COLUMNS)
+        w.writeheader()
+        for i, r in enumerate(picked, 1):
+            w.writerow(dict({k: r.get(k, "") for k in CAND_COLUMNS}, sample_no=i,
+                            check_digikey=f"https://www.digikey.com/en/products/result?keywords={quote(r['mpn'])}",
+                            check_mouser=f"https://www.mouser.com/c/?q={quote(r['mpn'])}", current_status="", checked_source="", note=""))
+    out["sample_csv"] = str(spath)
+    spath2 = out_dir / "ihs_candidates_summary.csv"
+    with open(spath2, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["维度", "取值", "候选数"])
+        for dim, col in (("IHS 大类", "ihs_family"), ("IHS 分类", "ihs_category"), ("当前厂商", "manufacturer_current"), ("匹配类型", "match_type")):
+            for v, n in Counter(r[col] for r in rows).most_common(50 if dim != "IHS 大类" else None):
+                w.writerow([dim, v, n])
+    out["summary_csv"] = str(spath2)
+    return out
+
+
+def resample_candidates(csv_path: str | Path, out_dir: str | Path, sample: int = 500, seed: int = 42, exclude_mfrs=None, log=print) -> dict:
+    """从已导出的 ihs_candidates.csv 重新抽样 / 统计（不连数据库、不扫 IHS），可排除厂商。不改动原 CSV。"""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    excluded = _mfr_excluder(exclude_mfrs, Lineage())
+    with open(csv_path, encoding="utf-8-sig", newline="") as f:
+        all_rows = list(csv.DictReader(f))
+    rows = [r for r in all_rows if not excluded(r)]
+    log(f"读取候选 {len(all_rows)} 条，排除厂商后 {len(rows)} 条")
+    res = _write_candidate_outputs(rows, out_dir, sample, seed, write_full=False)
+    return dict(res, candidates_in_csv=len(all_rows), excluded_mfr=len(all_rows) - len(rows), candidates=len(rows))
+
+
 def candidates(ihs_dir: str | Path, out_dir: str | Path, sample: int = 500, seed: int = 42, workers: int | None = None,
-               allow_empty: bool = False, log=print) -> dict:
+               allow_empty: bool = False, exclude_mfrs=None, log=print) -> dict:
     """IHS 里 2012 年仍在产、不是电源模块、ezPLM（暂存库）里还没有的 IC 型号 → CSV；再随机抽 sample 条供人工核对当前状态。
 
     同一型号 + 同一当前厂商（经谱系）只留一条；ezPLM 里已有同型号同厂商的排除。
     match_type：new = ezPLM 没有这个型号；other_mfr = ezPLM 有同型号但厂商不同（同号异厂，多半是另一颗料）。
     ezPLM 里同型号但厂商为空的，无法判断是否同一颗，保守排除。"""
-    import random
     from multiprocessing import Pool
     from sqlalchemy import select
     from .staging import StagedPart, get_session
@@ -336,33 +388,12 @@ def candidates(ihs_dir: str | Path, out_dir: str | Path, sample: int = 500, seed
                      "match_type": match, "ezplm_same_mpn_mfrs": "; ".join(sorted(names.get((k, c), c) for c in have)) if have else "",
                      "ihs_family": t[4], "ihs_category": t[5], "description": t[6], "package": t[7], "status_2012": t[3],
                      "generic": t[8], "ihs_objid": t[0], "batch": t[9]})
+    excluded = _mfr_excluder(exclude_mfrs, lin)
+    n_before = len(rows)
+    rows = [r for r in rows if not excluded(r)]
+    stats["excluded_mfr"] = n_before - len(rows)
     rows.sort(key=lambda r: (r["manufacturer_current"], r["mpn"]))
-
-    path = out_dir / "ihs_candidates.csv"
-    with open(path, "w", encoding="utf-8-sig", newline="") as f:      # utf-8-sig：Excel 直接打开不乱码
-        w = csv.DictWriter(f, fieldnames=CAND_COLUMNS)
-        w.writeheader()
-        w.writerows(rows)
-
-    from urllib.parse import quote
-    picked = random.Random(seed).sample(rows, min(sample, len(rows)))
-    spath = out_dir / f"ihs_candidates_sample{len(picked)}.csv"
-    with open(spath, "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=SAMPLE_COLUMNS)
-        w.writeheader()
-        for i, r in enumerate(picked, 1):
-            w.writerow(dict(r, sample_no=i, check_digikey=f"https://www.digikey.com/en/products/result?keywords={quote(r['mpn'])}",
-                            check_mouser=f"https://www.mouser.com/c/?q={quote(r['mpn'])}", current_status="", checked_source="", note=""))
-
-    from collections import Counter
-    spath2 = out_dir / "ihs_candidates_summary.csv"
-    with open(spath2, "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["维度", "取值", "候选数"])
-        for dim, col in (("IHS 大类", "ihs_family"), ("IHS 分类", "ihs_category"), ("当前厂商", "manufacturer_current"), ("匹配类型", "match_type")):
-            for v, n in Counter(r[col] for r in rows).most_common(50 if dim != "IHS 大类" else None):
-                w.writerow([dim, v, n])
-    stats.update(candidates=len(rows), csv=str(path), sample_csv=str(spath), summary_csv=str(spath2))
+    stats.update(candidates=len(rows), **_write_candidate_outputs(rows, out_dir, sample, seed))
     return stats
 
 
