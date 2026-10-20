@@ -113,7 +113,7 @@ pre{white-space:pre-wrap;word-break:break-all;background:#0f172a;color:#e2e8f0;p
 <div class=grp>数据</div><a href="/parts" class="{{ 'on' if nav=='parts' }}">物料信息</a><a href="/categories" class="{{ 'on' if nav=='categories' }}">分类</a><a href="/library" class="{{ 'on' if nav=='library' }}">符号 / 封装库</a>
 <div class=grp>治理</div><a href="/review" class="{{ 'on' if nav=='review' }}">复核队列</a><a href="/export" class="{{ 'on' if nav=='export' }}">回写 ezPLM</a>
 <div class=grp>系统</div><a href="/settings" class="{{ 'on' if nav=='settings' }}">设置</a>
-<div style="margin-top:20px;padding:0 10px" class=mute>{{ user }}{% if busy %}<br><span class=status-running>● 任务运行中</span>{% endif %}</div></aside>
+<div style="margin-top:20px;padding:0 10px" class=mute>时间均为{{ tz_label }}<br>{{ user }}{% if busy %}<br><span class=status-running>● 任务运行中</span>{% endif %}</div></aside>
 <main><div class=top><h1>{{ title }}</h1>{% block topright %}{% endblock %}</div>
 {% if msg %}<div class="msg {{ 'err' if err }}">{{ msg }}</div>{% endif %}
 {% block body %}{% endblock %}</main>
@@ -143,7 +143,7 @@ HOME = """{% extends "base" %}{% block body %}
 <div class=panel><h2>建议分布 <span class=mute style="font-weight:400">当前有效（待复核 + 自动写入）</span></h2>
 <table><tr><th>字段</th><th>动作</th><th>条数</th></tr>{% for f,a,n in s.by_field_action %}<tr><td>{{ f }}</td><td class="act-{{ a }}">{{ a }}</td><td>{{ n }}</td></tr>{% endfor %}</table></div>
 <div class=panel><h2>最近批次</h2>
-<table><tr><th>任务</th><th>阶段</th><th>批次</th><th>条数</th><th>时间</th></tr>{% for j in s.jobs %}<tr><td>{{ j.job }}</td><td>{{ j.stage }}</td><td>{{ j.batch_no }}</td><td>{{ j.n }}</td><td class=mute>{{ j.at }}</td></tr>{% endfor %}</table></div>
+<table><tr><th>任务</th><th>阶段</th><th>批次</th><th>条数</th><th>时间</th></tr>{% for j in s.jobs %}<tr><td>{{ j.job }}</td><td>{{ j.stage }}</td><td>{{ j.batch_no }}</td><td>{{ j.n }}</td><td class=mute>{{ j.at|local }}</td></tr>{% endfor %}</table></div>
 {% endblock %}"""
 
 JOBS = """{% extends "base" %}{% block body %}
@@ -251,7 +251,7 @@ PART = """{% extends "base" %}{% block topright %}<span class=mute>{{ p.manufact
 <tr><td>官网链接</td><td>{{ p.orig_url or '空' }} {% if p.new_url %}→ <a class=diff href="{{ p.new_url }}" target=_blank>{{ p.new_url }}</a>{% endif %}</td></tr>
 <tr><td>数据手册</td><td>{{ '有 PDF' if p.orig_has_pdf else '无' }} {% if p.new_datasheet %}→ <a class=diff href="{{ p.new_datasheet }}" target=_blank>{{ p.new_datasheet }}</a>{% endif %}</td></tr>
 <tr><td>标签</td><td>{% for t in (p.tags or '').split(',') if t %}<span class=tag>{{ t }}</span>{% endfor %}</td></tr>
-<tr><td>状态</td><td>处理 {{ p.processed_at or '未' }} · 回写 {{ p.exported_at or '未' }} · 价值分 {{ p.value_score }}</td></tr>
+<tr><td>状态</td><td>处理 {{ p.processed_at|local or '未' }} · 回写 {{ p.exported_at|local or '未' }} · 价值分 {{ p.value_score }}</td></tr>
 </table></div>
 <div class=panel><h2>手工修改新值</h2>
 <form class=frm method=post action="/parts/{{ p.id }}/edit">
@@ -280,7 +280,7 @@ PART = """{% extends "base" %}{% block topright %}<span class=mute>{{ p.manufact
 <table><tr><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>状态</th><th>操作</th><th>证据</th></tr>
 {% for r in props %}<tr class="{{ 'new' if r.review_status in ('auto','approved') }}">
 <td>{{ r.field }}</td><td class=mute>{{ r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b></td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
-<td class="act-{{ r.action }}">{{ r.action }}</td><td class=mute>{{ r.method }}</td><td>{{ r.review_status }}{% if r.reviewed_by %}<br><span class=mute>{{ r.reviewed_by }} {{ r.reviewed_at }}</span>{% endif %}</td>
+<td class="act-{{ r.action }}">{{ r.action }}</td><td class=mute>{{ r.method }}</td><td>{{ r.review_status }}{% if r.reviewed_by %}<br><span class=mute>{{ r.reviewed_by }} {{ r.reviewed_at|local }}</span>{% endif %}</td>
 <td style="white-space:nowrap">{% if r.review_status=='pending' %}<form class=inline method=post action="/review/{{ r.id }}/approve"><button class=ok>通过</button></form> <form class=inline method=post action="/review/{{ r.id }}/reject"><button class=bad>驳回</button></form>
 {% elif r.review_status=='auto' %}<form class=inline method=post action="/review/{{ r.id }}/revert"><button class=bad>撤销自动写入</button></form>{% endif %}</td>
 <td><details><summary class=mute>查看</summary><pre style="background:#f3f4f6;color:#111">{{ r.evidence_json }}</pre></details></td></tr>{% endfor %}</table>
@@ -342,7 +342,7 @@ PARAMS = """{% extends "base" %}{% block topright %}<a class=btn href="/categori
 IHSMAP = """{% extends "base" %}{% block topright %}<a class=btn href="/categories">← 返回分类树</a>{% endblock %}{% block body %}
 <p class=mute>{{ path }} · 可靠匹配到 IHS（L1–L3）的物料 {{ prof.n_parts }} 条 · IHS 子类：{% for c, n in prof.ihs_categories %}{{ c }}（{{ n }}）{% if not loop.last %}、{% endif %}{% endfor %}</p>
 <p>状态：{% if not row %}<b>尚未生成</b>{% elif row.status == 'approved' %}<b style="color:var(--ok)">已确认</b>（{{ row.approved_by }}）{% else %}<b style="color:var(--warn)">草稿，待确认</b>{% endif %}
-{% if row and row.applied_at %} · 已应用到 {{ row.applied_parts }} 个物料（{{ row.applied_at }}）{% endif %}{% if row and row.model %} · 模型 {{ row.model }}{% endif %}</p>
+{% if row and row.applied_at %} · 已应用到 {{ row.applied_parts }} 个物料（{{ row.applied_at|local }}）{% endif %}{% if row and row.model %} · 模型 {{ row.model }}{% endif %}</p>
 {% if not tgts %}<div class="msg err">该分类还没有关键参数：先到 <a href="/categories/{{ cid }}/params">关键参数</a> 挂上内置参数或让模型生成。</div>{% endif %}
 <div class=filters>
 <form class=inline method=post action="/categories/{{ cid }}/ihs-map/suggest"><button class=pri {{ 'disabled' if not llm_ok or not tgts or not prof.n_parts }}>{{ '让模型重新生成' if row else '让模型生成映射' }}</button></form>
@@ -469,6 +469,9 @@ SETTINGS = """{% extends "base" %}{% block body %}
 env = Environment(loader=DictLoader({"base": BASE, "home": HOME, "jobs": JOBS, "parts": PARTS, "part": PART, "review": REVIEW,
                                      "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS, "ihsmap": IHSMAP, "reviewgroups": REVIEWGROUPS}), autoescape=True)
 env.globals["pct"] = lambda a, b: round(100.0 * (a or 0) / b, 1) if b else 0
+from .tz import LABEL as _TZ_LABEL, to_local as _to_local
+env.filters["local"] = _to_local                  # 数据库里的 UTC 时间 → 北京时间显示
+env.globals["tz_label"] = _TZ_LABEL
 
 
 def render(name, request: Request | None = None, **ctx):

@@ -15,6 +15,8 @@ import traceback
 from collections import deque
 from datetime import datetime, timedelta
 
+from .tz import local_now
+
 LOCK_KEY = "job:lock"
 LOCK_STALE = 120          # 秒
 LOCK_BEAT = 30            # 秒
@@ -72,18 +74,18 @@ def _touch_db_lock(release: bool = False):
 
 class Job:
     def __init__(self, kind: str, params: dict):
-        self.id = f"{kind}-{datetime.now():%Y%m%d-%H%M%S}"
+        self.id = f"{kind}-{local_now():%Y%m%d-%H%M%S}"
         self.kind, self.params = kind, params
         self.status = "queued"          # queued / running / done / failed / stopped
         self.log: deque[str] = deque(maxlen=400)
-        self.started_at = datetime.now()
+        self.started_at = local_now()                  # 任务时间按显示时区（默认北京时间）记录，见 tz.py
         self.finished_at: datetime | None = None
         self.result = None
         self._stop = threading.Event()
         self.progress = {"done": 0, "total": 0}
 
     def say(self, msg: str):
-        self.log.append(f"[{datetime.now():%H:%M:%S}] {msg}")
+        self.log.append(f"[{local_now():%H:%M:%S}] {msg}")
 
     def stop(self):
         self._stop.set()
@@ -143,7 +145,7 @@ class JobManager:
                 job.say("失败：" + str(e))
                 job.say(traceback.format_exc()[-1500:])
             finally:
-                job.finished_at = datetime.now()
+                job.finished_at = local_now()
                 self.history.appendleft(job)
                 _touch_db_lock(release=True)
 
