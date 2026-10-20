@@ -14,7 +14,9 @@ no_flag:
   - {current: "微处理器|微控制器|片上系统|DSP|FPGA", proposed: "存储器"}
 keyword:
   # 处理器描述里常见"支持 DDR2/3 内存"（MPC8536 等被判成存储器），排除处理器类描述
-  - {pattern: "动态随机存取存储器|DRAM|SDRAM|DDR[2-5]?|LPDDR", exclude: "缓冲器|驱动器|控制器|寄存器|时钟|Buffer|Controller|Register|处理器|Processor|CPU|主频|内核|核心|PowerQUICC|QorIQ|片上系统|SoC|微控制器|MCU|FPGA", category: "存储器 > 存储器", conf: 0.95}
+  # 型号里也会出现 DRAM 字样（SICK 料位开关 LBV320-XXTGDRAMX01100 被判成存储器）：英文缩写前后不能紧挨字母/数字
+  # （不用 \\b：中文也算单词字符，"DDR3内存" 之间没有 \\b）
+  - {pattern: "动态随机存取存储器|(?<![A-Za-z0-9])(DRAM|SDRAM|DDR[2-5]?L?|LPDDR[2-5]?X?)(?![A-Za-z0-9])", exclude: "缓冲器|驱动器|控制器|寄存器|时钟|Buffer|Controller|Register|处理器|Processor|CPU|主频|内核|核心|PowerQUICC|QorIQ|片上系统|SoC|微控制器|MCU|FPGA", category: "存储器 > 存储器", conf: 0.95}
   - {pattern: "NAND\\s*Flash|NOR\\s*Flash|EEPROM|SRAM|PSRAM|OctalRAM|FRAM|MRAM|随机存取存储器|闪存存储器", exclude: "微控制器|单片机|MCU|Microcontroller|微处理器|Processor|FPGA|CPLD|Cortex|RISC-V|DSP|SoC|模组|模块|Module|开发板", category: "存储器 > 存储器", conf: 0.92}
   - {pattern: "数字隔离器", category: "数字隔离器", conf: 0.95}
   - {pattern: "光耦|光隔离器|光电耦合", category: "光隔离器", conf: 0.85}
