@@ -279,7 +279,7 @@ PART = """{% extends "base" %}{% block topright %}<span class=mute>{{ p.manufact
 <div class=panel><h2>建议与复核</h2>
 <table><tr><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>状态</th><th>操作</th><th>证据</th></tr>
 {% for r in props %}<tr class="{{ 'new' if r.review_status in ('auto','approved') }}">
-<td>{{ r.field }}</td><td class=mute>{{ r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b></td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
+<td>{{ r.field }}</td><td class=mute>{{ r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b>{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/symbol-files/{{ ev.sha256 }}" class=mute>下载 .kicad_sym（{{ ev.pin_count }} 脚，{{ ev.sources|join('+') }}）</a>{% endif %}{% if 'conflict' in ev %}<br><span class=diff>与其它来源引脚不一致：{% for x in ev.conflict %}{{ x.source }} {{ x.pin_count }} 脚{% if not loop.last %}，{% endif %}{% endfor %}</span>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
 <td class="act-{{ r.action }}">{{ r.action }}</td><td class=mute>{{ r.method }}</td><td>{{ r.review_status }}{% if r.reviewed_by %}<br><span class=mute>{{ r.reviewed_by }} {{ r.reviewed_at|local }}</span>{% endif %}</td>
 <td style="white-space:nowrap">{% if r.review_status=='pending' %}<form class=inline method=post action="/review/{{ r.id }}/approve"><button class=ok>通过</button></form> <form class=inline method=post action="/review/{{ r.id }}/reject"><button class=bad>驳回</button></form>
 {% elif r.review_status=='auto' %}<form class=inline method=post action="/review/{{ r.id }}/revert"><button class=bad>撤销自动写入</button></form>{% endif %}</td>
@@ -471,6 +471,16 @@ env = Environment(loader=DictLoader({"base": BASE, "home": HOME, "jobs": JOBS, "
 env.globals["pct"] = lambda a, b: round(100.0 * (a or 0) / b, 1) if b else 0
 from .tz import LABEL as _TZ_LABEL, to_local as _to_local
 env.filters["local"] = _to_local                  # 数据库里的 UTC 时间 → 北京时间显示
+
+
+def _fromjson(s):
+    try:
+        return json.loads(s or "{}")
+    except ValueError:
+        return {}
+
+
+env.filters["fromjson"] = _fromjson
 env.globals["tz_label"] = _TZ_LABEL
 
 
@@ -1267,6 +1277,18 @@ def settings_test_llm(user: str = Depends(auth)):
 @app.get("/api/summary")
 def api_summary(user: str = Depends(auth)):
     return json.loads(json.dumps(pipeline.summary(), default=str))
+
+
+@app.get("/symbol-files/{sha256}")
+def symbol_file(sha256: str, user: str = Depends(auth)):
+    from .symsets import file_content
+    got = file_content(get_session(), sha256)
+    if not got:
+        raise HTTPException(404)
+    from urllib.parse import quote
+    name, data = got
+    return HTMLResponse(data, media_type="application/octet-stream",
+                        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(Path(name).name)}"})
 
 
 @app.get("/healthz")

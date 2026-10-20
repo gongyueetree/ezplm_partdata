@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from datetime import datetime
 
-from sqlalchemy import (Boolean, Column, DateTime, Float, Index, Integer, String, Text, create_engine)
+from sqlalchemy import (Boolean, Column, DateTime, Float, Index, Integer, LargeBinary, String, Text, create_engine)
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 Base = declarative_base()
@@ -168,6 +168,21 @@ class EzFootprint(Base):
     has_3d = Column(Boolean, default=False)
     has_pdf = Column(Boolean, default=False)
     fetched_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SymbolFile(Base):
+    """整理好的原理图符号文件（同事 / GPT / Claude 三批，见 symsets.py）。按内容 SHA-256 去重，gzip 压缩存储，最终补回 ezPLM 时从这里取。"""
+    __tablename__ = "symbol_files"
+    sha256 = Column(String(64), primary_key=True)
+    name = Column(String(200), index=True)             # 文件里的符号名
+    pin_count = Column(Integer)
+    pins_json = Column(Text)                           # 引脚编号列表（排序），用来比对不同来源是否一致
+    source = Column(String(40))                        # send / gpt / claude
+    origin = Column(String(300))                       # 原始来源说明（如 Altium AD10 厂商库、KiCad 官方库）
+    filename = Column(String(300))
+    size = Column(Integer)
+    content_gz = Column(LargeBinary)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class OshwBom(Base):

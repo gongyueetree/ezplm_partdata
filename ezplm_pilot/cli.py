@@ -21,6 +21,7 @@ python -m ezplm_pilot.cli ihs-candidates --dir <IHS数据目录> [--sample 500] 
 python -m ezplm_pilot.cli ihs-candidates --from-csv out/ihs_candidates.csv --exclude-mfr X  # 不连库，从已导出的候选重新抽样
 python -m ezplm_pilot.cli oshw-load --csv <开源工作区BOM导出.csv>                        # 导入开源硬件工程 BOM 行（docs/OSHW_EXPORT.md）
 python -m ezplm_pilot.cli oshw-match                                                      # 按型号匹配开源工程 → 封装建议（不用大模型）
+python -m ezplm_pilot.cli symbols-import                                                   # 合并导入三批符号（同事 Send / GPT / Claude）→ 符号建议，引脚冲突进复核
 python -m ezplm_pilot.cli dedupe                                                          # 作废重复的待复核建议
 暂存库默认 ./staging.sqlite，可设 EZPLM_STAGING_DB=postgresql://user:pw@host/db
 
@@ -217,6 +218,13 @@ def cmd_oshw_match(a):
     print(json.dumps(match(get_session(), auto_min=a.auto_min), ensure_ascii=False, indent=1))
 
 
+def cmd_symbols_import(a):
+    from .staging import get_session
+    from .symsets import run
+    paths = {k: v for k, v in (("send_csv", a.send_csv), ("gpt_xlsx", a.gpt_xlsx), ("gpt_zip", a.gpt_zip), ("claude_csv", a.claude_csv), ("claude_dir", a.claude_dir)) if v}
+    print(json.dumps(run(get_session(), paths, auto_min=a.auto_min), ensure_ascii=False, indent=1))
+
+
 def cmd_dedupe(a):
     from . import pipeline
     pipeline.dedupe_pending(log=print)
@@ -254,6 +262,10 @@ def main(argv=None):
     s = sub.add_parser("ezplm-lib"); s.set_defaults(fn=cmd_ezplm_lib)
     s = sub.add_parser("oshw-load"); s.add_argument("--csv", required=True, help="后端导出的开源工作区 BOM 行（docs/OSHW_EXPORT.md）"); s.set_defaults(fn=cmd_oshw_load)
     s = sub.add_parser("oshw-match"); s.add_argument("--auto-min", type=float, default=0.85); s.set_defaults(fn=cmd_oshw_match)
+    s = sub.add_parser("symbols-import", help="合并导入同事/GPT/Claude 三批已对应物料 ID 的符号（默认读桌面上的目录）")
+    for k in ("send-csv", "gpt-xlsx", "gpt-zip", "claude-csv", "claude-dir"):
+        s.add_argument(f"--{k}")
+    s.add_argument("--auto-min", type=float, default=0.85); s.set_defaults(fn=cmd_symbols_import)
     s = sub.add_parser("dedupe"); s.set_defaults(fn=cmd_dedupe)
     s = sub.add_parser("serve"); s.add_argument("--host", default="0.0.0.0"); s.add_argument("--port", type=int, default=8080); s.set_defaults(fn=cmd_serve)
 

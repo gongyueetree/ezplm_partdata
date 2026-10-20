@@ -11,3 +11,4 @@ kiutils>=1.4
 requests>=2.31
 pyyaml>=6.0
 anthropic>=0.30
+openpyxl>=3.1
