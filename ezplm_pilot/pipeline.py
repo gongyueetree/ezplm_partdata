@@ -438,6 +438,67 @@ def review(proposal_id: int, decision: str, user: str = "admin", note: str = "")
     return pr
 
 
+# --------------------------------------------------------------------------- 分组复核
+def _group_filter(stmt, field: str, current: str | None, proposed: str | None, action: str = "", minconf: float | None = None):
+    stmt = stmt.where(StagedProposal.review_status == "pending", StagedProposal.field == field)
+    if current is not None:
+        stmt = stmt.where(or_(StagedProposal.current == "", StagedProposal.current.is_(None)) if current == "" else StagedProposal.current == current)
+    if proposed is not None:
+        stmt = stmt.where(StagedProposal.proposed == proposed)
+    if action:
+        stmt = stmt.where(StagedProposal.action == action)
+    if minconf is not None:
+        stmt = stmt.where(StagedProposal.confidence >= minconf)
+    return stmt
+
+
+def review_groups(db, field: str = "category_id", action: str = "", minconf: float | None = None, limit: int = 300) -> tuple[list[dict], int]:
+    """待复核建议按"现值 → 建议值"分组，条数多的在前。返回 (前 limit 组, 总组数)。"""
+    cur = func.coalesce(StagedProposal.current, "")
+    base = _group_filter(select(cur.label("cur"), StagedProposal.proposed, StagedProposal.action, func.count().label("n"),
+                                func.avg(StagedProposal.confidence), func.min(StagedProposal.confidence), func.max(StagedProposal.confidence)),
+                         field, None, None, action, minconf).group_by(cur, StagedProposal.proposed, StagedProposal.action)
+    n_groups = db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
+    rows = db.execute(base.order_by(func.count().desc()).limit(limit)).all()
+    return [{"current": c, "proposed": p, "action": a, "n": n, "avg": float(avg or 0), "min": float(mn or 0), "max": float(mx or 0)}
+            for c, p, a, n, avg, mn, mx in rows], n_groups
+
+
+def review_group(field: str, current: str, proposed: str, decision: str, action: str = "", minconf: float | None = None, user: str = "admin",
+                 stop=None, log=None, progress=None) -> dict:
+    """整组通过 / 驳回。通过时写新值，并作废同物料同字段的其它待复核建议；驳回记为 group-rejected（可作为规则改进的样本）。"""
+    if decision not in ("approve", "reject"):
+        raise ValueError(decision)
+    log = log or (lambda m: None)
+    db = get_session()
+    tax = load_taxonomy(db)
+    total = db.execute(select(func.count()).select_from(_group_filter(select(StagedProposal.id), field, current, proposed, action, minconf).subquery())).scalar() or 0
+    done, now = 0, datetime.utcnow()
+    while True:
+        prs = db.execute(_group_filter(select(StagedProposal), field, current, proposed, action, minconf).order_by(StagedProposal.id).limit(1000)).scalars().all()
+        if not prs:
+            break
+        parts = {sp.id: sp for sp in db.execute(select(StagedPart).where(StagedPart.id.in_({p.part_id for p in prs}))).scalars()}
+        for pr in prs:
+            pr.review_status = "approved" if decision == "approve" else "rejected"
+            pr.reviewed_by, pr.reviewed_at, pr.review_note = user, now, f"group-{decision}"
+            if decision == "approve" and pr.part_id in parts:
+                apply_proposal(db, parts[pr.part_id], pr, tax)
+        if decision == "approve":
+            for other in db.execute(select(StagedProposal).where(StagedProposal.part_id.in_(list(parts)), StagedProposal.field == field,
+                                                                 StagedProposal.review_status == "pending")).scalars():
+                other.review_status, other.review_note = "rejected", "superseded"
+        db.commit()
+        done += len(prs)
+        log(f"已{'通过' if decision == 'approve' else '驳回'} {done}/{total}")
+        if progress:
+            progress({"done": done, "total": total})
+        if stop and stop():
+            break
+    db.close()
+    return {"decision": decision, "field": field, "done": done, "total": total}
+
+
 # --------------------------------------------------------------------------- export
 def export(out_path: str | Path | None = None, apply: bool = False, api=None, batch: int = 200, only_fields=None, job: str | None = None,
            stop=None, log=None, progress=None) -> dict:

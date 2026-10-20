@@ -287,7 +287,7 @@ PART = """{% extends "base" %}{% block topright %}<span class=mute>{{ p.manufact
 {{ p.notes or '' }}</pre>
 {% endblock %}"""
 
-REVIEW = """{% extends "base" %}{% block body %}
+REVIEW = """{% extends "base" %}{% block topright %}<a class=btn href="/review/groups">按组汇总复核 →</a>{% endblock %}{% block body %}
 <form class=filters method=get>
 <select name=field><option value="">— 字段 —</option>{% for v in ['category_id','symbol','footprint','url','datasheet','description_en','manufacturer'] %}<option {{ 'selected' if field==v }}>{{ v }}</option>{% endfor %}</select>
 <select name=action><option value="">— 动作 —</option>{% for v in ['flag_mismatch','review'] %}<option {{ 'selected' if action==v }}>{{ v }}</option>{% endfor %}</select>
@@ -361,6 +361,21 @@ IHSMAP = """{% extends "base" %}{% block topright %}<a class=btn href="/categori
 <form method=post action="/categories/{{ cid }}/ihs-map/save"><textarea name=mapping_json style="width:100%;height:280px;font-family:ui-monospace,Menlo,monospace;font-size:12px">{{ mapping_text }}</textarea><p><button>保存为草稿</button></p></form>{% endif %}
 <h2>IHS 参数列（覆盖率 ≥ 5%）</h2><table><tr><th>列</th><th>覆盖率</th><th>不同取值</th><th>常见值</th></tr>
 {% for c in prof.columns if c.coverage >= 0.05 %}<tr><td>{{ c.column }}</td><td>{{ '%.0f'|format(c.coverage * 100) }}%</td><td>{{ c.distinct }}</td><td class=mute>{{ c.samples|join(', ') }}</td></tr>{% endfor %}</table>
+{% endblock %}"""
+
+REVIEWGROUPS = """{% extends "base" %}{% block topright %}<a class=btn href="/review">← 逐条复核</a>{% endblock %}{% block body %}
+<form class=filters method=get>
+<select name=field>{% for v in ['category_id','footprint','symbol','manufacturer','description_en','url','datasheet'] %}<option {{ 'selected' if field==v }}>{{ v }}</option>{% endfor %}</select>
+<select name=action><option value="">— 动作 —</option>{% for v in ['flag_mismatch','review'] %}<option {{ 'selected' if action==v }}>{{ v }}</option>{% endfor %}</select>
+<input name=minconf value="{{ minconf }}" placeholder="最低置信度" style="width:110px"><button class=pri>筛选</button>
+<span class=mute>共 {{ n_groups }} 组，显示条数最多的 {{ groups|length }} 组</span></form>
+<p class=mute>每组是"现值 → 建议值"相同的一批待复核建议。先点"看样例"抽查几条，确认整组都对再整组通过；整组都错就整组驳回，并把规律告诉开发者改规则。整组操作在后台任务里执行。</p>
+<table><tr><th>条数</th><th>现值</th><th>建议值</th><th>动作</th><th>置信度（平均 / 范围）</th><th>操作</th></tr>
+{% for g in groups %}<tr><td><b>{{ g.n }}</b></td><td class=mute style="max-width:320px">{{ label(g.current) or '空' }}</td><td style="max-width:320px"><b>{{ label(g.proposed) }}</b></td>
+<td class="act-{{ g.action }}">{{ g.action }}</td><td>{{ '%.2f'|format(g.avg) }} <span class=mute>（{{ '%.2f'|format(g['min']) }}–{{ '%.2f'|format(g['max']) }}）</span></td>
+<td style="white-space:nowrap"><a class=btn href="/review?field={{ field }}&status=pending&action={{ g.action }}&minconf={{ minconf }}&current={{ g.current|urlencode }}&proposed={{ g.proposed|urlencode }}" target=_blank>看样例</a>
+<form class=inline method=post action="/review/groups/apply" onsubmit="return confirm('整组通过 {{ g.n }} 条？会把建议值写为新值。')"><input type=hidden name=field value="{{ field }}"><input type=hidden name=current value="{{ g.current }}"><input type=hidden name=proposed value="{{ g.proposed }}"><input type=hidden name=action value="{{ g.action }}"><input type=hidden name=minconf value="{{ minconf }}"><input type=hidden name=decision value=approve><button class=ok {{ 'disabled' if busy }}>整组通过</button></form>
+<form class=inline method=post action="/review/groups/apply" onsubmit="return confirm('整组驳回 {{ g.n }} 条？')"><input type=hidden name=field value="{{ field }}"><input type=hidden name=current value="{{ g.current }}"><input type=hidden name=proposed value="{{ g.proposed }}"><input type=hidden name=action value="{{ g.action }}"><input type=hidden name=minconf value="{{ minconf }}"><input type=hidden name=decision value=reject><button class=bad {{ 'disabled' if busy }}>整组驳回</button></form></td></tr>{% endfor %}</table>
 {% endblock %}"""
 
 LIBRARY = """{% extends "base" %}{% block topright %}<a class=btn href="/library/upload">导入符号 / 封装 / 工程</a>{% endblock %}{% block body %}
@@ -451,7 +466,7 @@ SETTINGS = """{% extends "base" %}{% block body %}
 {% endblock %}"""
 
 env = Environment(loader=DictLoader({"base": BASE, "home": HOME, "jobs": JOBS, "parts": PARTS, "part": PART, "review": REVIEW,
-                                     "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS, "ihsmap": IHSMAP}), autoescape=True)
+                                     "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS, "ihsmap": IHSMAP, "reviewgroups": REVIEWGROUPS}), autoescape=True)
 env.globals["pct"] = lambda a, b: round(100.0 * (a or 0) / b, 1) if b else 0
 
 
@@ -753,7 +768,8 @@ async def part_edit(request: Request, pid: str, user: str = Depends(auth)):
 
 # ---- 复核
 @app.get("/review", response_class=HTMLResponse)
-def review_queue(request: Request, field: str = "", action: str = "", status: str = "pending", minconf: str = "", page: int = 1, size: int = 50, user: str = Depends(auth)):
+def review_queue(request: Request, field: str = "", action: str = "", status: str = "pending", minconf: str = "", page: int = 1, size: int = 50,
+                 current: str | None = None, proposed: str | None = None, user: str = Depends(auth)):
     db = get_session()
     stmt = select(StagedProposal, StagedPart).join(StagedPart, StagedPart.id == StagedProposal.part_id).where(StagedProposal.review_status == status, StagedProposal.field != "manual")
     if field:
@@ -762,12 +778,17 @@ def review_queue(request: Request, field: str = "", action: str = "", status: st
         stmt = stmt.where(StagedProposal.action == action)
     if minconf:
         stmt = stmt.where(StagedProposal.confidence >= float(minconf))
+    if current is not None:                  # 从分组页"看样例"进来：只看这一组
+        stmt = stmt.where(or_(StagedProposal.current == "", StagedProposal.current.is_(None)) if current == "" else StagedProposal.current == current)
+    if proposed is not None:
+        stmt = stmt.where(StagedProposal.proposed == proposed)
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar()
     rows = db.execute(stmt.order_by(StagedProposal.confidence.desc(), StagedPart.value_score.desc()).offset((page - 1) * size).limit(size)).all()
     tax = pipeline.load_taxonomy(db)
     for r, p in rows:
         r.current_label = tax.path(r.current) if (r.field == "category_id" and r.current in tax.nodes) else ""
-    qs = f"field={field}&action={action}&status={status}&minconf={minconf}"
+    from urllib.parse import quote
+    qs = f"field={field}&action={action}&status={status}&minconf={minconf}" + (f"&current={quote(current)}" if current is not None else "") + (f"&proposed={quote(proposed)}" if proposed is not None else "")
     return render("review", request, title="复核队列", nav="review", user=user, rows=rows, total=total, page=page, size=size, field=field, action=action, status=status, minconf=minconf, qs=qs, next=f"/review?{qs}&page={page}")
 
 
@@ -782,6 +803,30 @@ async def review_bulk(request: Request, next: str = "", user: str = Depends(auth
             except KeyError:
                 pass
     return back(next or "/review", f"已通过 {n} 条")
+
+
+@app.get("/review/groups", response_class=HTMLResponse)
+def review_groups_page(request: Request, field: str = "category_id", action: str = "", minconf: str = "", user: str = Depends(auth)):
+    db = get_session()
+    groups, n_groups = pipeline.review_groups(db, field, action, float(minconf) if minconf else None)
+    tax = pipeline.load_taxonomy(db)
+    label = (lambda v: tax.path(v) if v in tax.nodes else (v or "")) if field == "category_id" else (lambda v: v or "")
+    return render("reviewgroups", request, title="分组复核", nav="review", user=user, groups=groups, n_groups=n_groups, field=field, action=action, minconf=minconf, label=label)
+
+
+@app.post("/review/groups/apply")
+async def review_groups_apply(request: Request, user: str = Depends(auth)):
+    f = await request.form()
+    field, decision = f.get("field") or "category_id", f.get("decision")
+    cur, prop, action = f.get("current") or "", f.get("proposed") or "", f.get("action") or ""
+    minconf = float(f["minconf"]) if f.get("minconf") else None
+    try:
+        manager.start("review-group", lambda j: pipeline.review_group(field, cur, prop, decision, action, minconf, user=user, stop=j.should_stop, log=j.say,
+                                                                       progress=lambda p: j.progress.update(p)),
+                      {"field": field, "current": cur, "proposed": prop, "decision": decision, "action": action})
+    except (RuntimeError, ValueError) as e:
+        return back("/review/groups", str(e), True)
+    return back(f"/review/groups?field={field}&action={action}&minconf={f.get('minconf') or ''}", "已在后台执行整组操作，完成后刷新本页")
 
 
 @app.post("/review/void-stale")
