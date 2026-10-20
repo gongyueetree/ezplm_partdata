@@ -3,13 +3,24 @@
 #   mpn      : 制造商 + 型号前缀正则 -> 分类名
 #   symbol_lib : KiCad 符号所在库名前缀 -> 允许的分类根/叶子（交叉验证用）
 # 规则按顺序匹配，先命中者优先；conf 为该规则的置信度。
+# no_flag：原分类 → 建议分类 匹配这些（正则，对完整路径）时，不判"疑似错误"。
+# 多是"从更细的分类挪到更笼统的分类"：规则只认通用关键词，不知道原分类已经更具体。
+no_flag:
+  - {current: "预偏置", proposed: "单双极晶体管"}
+  - {current: "阵列", proposed: "单二极管|单 FET|单双极晶体管|单 IGBT"}
+  - {current: "应用特定微控制器", proposed: "微控制器（MCU）$"}
+  - {current: "LED 驱动器", proposed: "DC-DC 开关稳压器|DC-DC 开关控制器"}
+  - {current: "片上系统", proposed: "FPGA"}
+  - {current: "微处理器|微控制器|片上系统|DSP|FPGA", proposed: "存储器"}
 keyword:
-  - {pattern: "动态随机存取存储器|DRAM|SDRAM|DDR[2-5]?|LPDDR", exclude: "缓冲器|驱动器|控制器|寄存器|时钟|Buffer|Controller|Register", category: "存储器 > 存储器", conf: 0.95}
+  # 处理器描述里常见"支持 DDR2/3 内存"（MPC8536 等被判成存储器），排除处理器类描述
+  - {pattern: "动态随机存取存储器|DRAM|SDRAM|DDR[2-5]?|LPDDR", exclude: "缓冲器|驱动器|控制器|寄存器|时钟|Buffer|Controller|Register|处理器|Processor|CPU|主频|内核|核心|PowerQUICC|QorIQ|片上系统|SoC|微控制器|MCU|FPGA", category: "存储器 > 存储器", conf: 0.95}
   - {pattern: "NAND\\s*Flash|NOR\\s*Flash|EEPROM|SRAM|PSRAM|OctalRAM|FRAM|MRAM|随机存取存储器|闪存存储器", exclude: "微控制器|单片机|MCU|Microcontroller|微处理器|Processor|FPGA|CPLD|Cortex|RISC-V|DSP|SoC|模组|模块|Module|开发板", category: "存储器 > 存储器", conf: 0.92}
   - {pattern: "数字隔离器", category: "数字隔离器", conf: 0.95}
   - {pattern: "光耦|光隔离器|光电耦合", category: "光隔离器", conf: 0.85}
   - {pattern: "微控制器|\\bMCU\\b|Cortex-M|RISC-V 内核", category: "微控制器（MCU）", conf: 0.9}
-  - {pattern: "现场可编程门阵列|\\bFPGA\\b", category: "FPGA（现场可编程门阵列）", conf: 0.9}
+  # Zynq MPSoC/RFSoC 这类"处理器 + FPGA"的器件按 SoC 归类，不触发 FPGA 规则
+  - {pattern: "现场可编程门阵列|\\bFPGA\\b", exclude: "片上系统|SoC|MPSoC|RFSoC|Cortex-A|A53|处理器", category: "FPGA（现场可编程门阵列）", conf: 0.9}
   - {pattern: "带微控制器的 FPGA|集成微控制器的现场可编程", category: "带微控制器的 FPGA（现场可编程门阵列）", conf: 0.95}
   - {pattern: "齐纳二极管|稳压二极管|Zener", category: "单齐纳二极管", conf: 0.9}
   - {pattern: "TVS|瞬态电压抑制", category: "TVS 二极管", conf: 0.9}
@@ -17,7 +28,7 @@ keyword:
   - {pattern: "双 ?[NP] ?沟道|Dual.*MOSFET|MOSFET 阵列", category: "FET、MOSFET 阵列", conf: 0.9}
   - {pattern: "[NP] ?沟道.*MOSFET|MOSFET.*[NP] ?沟道|MOSFET.*(DPAK|SOT|TO-)", category: "单 FET，MOSFET", conf: 0.88}
   - {pattern: "\\bIGBT\\b", category: "单 IGBT", conf: 0.8}
-  - {pattern: "NPN|PNP|双极晶体管|BJT", category: "单双极晶体管", conf: 0.8}
+  - {pattern: "NPN|PNP|双极晶体管|BJT", exclude: "预偏置|偏置电阻|带电阻|内置电阻|数字晶体管|阵列|双 ?NPN|双 ?PNP|NPN ?\\+ ?PNP|Dual|Array", category: "单双极晶体管", conf: 0.8}
   - {pattern: "LDO|线性稳压器|低压差", category: "稳压器 - 线性稳压器控制器", conf: 0.6}
   # 排除电源模块（如 "DC/DC转换器 – 机箱安装型 120W …8thBrick"）：它们不是 IC，交给近邻/LLM/人工
   - {pattern: "DC[/-]?DC.*(转换器|稳压|开关)|降压|升压|Buck|Boost", exclude: "模块|机箱安装|板安装|[Bb]rick|砖", category: "稳压器 - DC-DC 开关稳压器", conf: 0.85}

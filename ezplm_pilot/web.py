@@ -164,7 +164,8 @@ JOBS = """{% extends "base" %}{% block body %}
 <label><input type=checkbox name=urls value=1> 补全官网/数据手册链接（联网验证，较慢）</label>
 <label><input type=checkbox name=details value=1 checked> 拉取物料属性（缺封装的物料逐条调 ezPLM 详情接口，用于封装映射；较慢，首轮全量可先不勾）</label>
 <p><button class=pri {{ 'disabled' if busy }}>开始处理</button> <span class=mute>待处理 {{ s.parts_total - s.parts_processed }} 条</span></p></form>
-<form method=post action="/jobs/reset-processed" onsubmit="return confirm('把所有物料标记为未处理？这些物料的待复核建议会作废（重新处理时重新生成）；已写入的新值保留。')"><button>重置处理状态（规则更新后重跑）</button></form></div>
+<form class=inline method=post action="/jobs/reset-processed" onsubmit="return confirm('把所有物料标记为未处理？这些物料的待复核建议会作废（重新处理时重新生成）；已写入的新值保留。')"><button>重置处理状态（规则更新后重跑）</button></form>
+<form class=inline method=post action="/jobs/reset-pending-category" onsubmit="return confirm('只把还有待复核分类建议的物料标成未处理，并作废这些建议？之后运行②处理会按新规则重新判断。')"><button>只重跑有待复核分类建议的物料</button></form></div>
 
 <div class=panel><h2>③ 扫描符号/封装来源（scan）</h2>
 <form class=frm method=post action="/jobs/start"><input type=hidden name=kind value=scan>
@@ -672,6 +673,15 @@ def jobs_reset(user: str = Depends(auth)):
     db.commit()
     v = pipeline.void_stale_pending()
     return back("/jobs", f"已重置 {n} 条为未处理，作废其待复核建议 {v} 条")
+
+
+@app.post("/jobs/reset-pending-category")
+def jobs_reset_pending_category(user: str = Depends(auth)):
+    if manager.is_busy():
+        return back("/jobs", "有任务在运行，等它结束再操作", True)
+    n = pipeline.reset_parts_with_pending("category_id")
+    v = pipeline.void_stale_pending()
+    return back("/jobs", f"已把 {n} 条物料标成未处理，作废其待复核建议 {v} 条；现在运行 ② 处理即可按新规则重新判断")
 
 
 @app.get("/api/jobs/current")

@@ -376,6 +376,19 @@ def ihs_match(batch: int = 500, job: str | None = None, only_matched: bool = Tru
     return stats
 
 
+def reset_parts_with_pending(field: str = "category_id") -> int:
+    """规则改了以后只重跑受影响的物料：把还有该字段待复核建议的物料标成未处理（其待复核建议随后由 void_stale_pending 作废，
+    重新处理时按新规则重新生成）。比"重置处理状态"全量重跑快得多。"""
+    from sqlalchemy import update
+    db = get_session()
+    ids = select(StagedProposal.part_id).where(StagedProposal.review_status == "pending", StagedProposal.field == field)
+    n = db.execute(update(StagedPart).where(StagedPart.id.in_(ids), StagedPart.processed_at.isnot(None)).values(processed_at=None),
+                   execution_options={"synchronize_session": False}).rowcount
+    db.commit()
+    db.close()
+    return n or 0
+
+
 def void_stale_pending() -> int:
     """作废"未处理"物料上的待复核建议：它们是旧规则留下的（物料被重置或从未按当前规则处理），重新处理时会重新生成。"""
     from sqlalchemy import update

@@ -62,6 +62,7 @@ class RuleEngine:
         self.mpn = [(re.compile(r.get("manufacturer", ".*"), re.I), re.compile(r["pattern"], re.I), self._resolve(r["category"]), r.get("conf", 0.8))
                     for r in cfg.get("mpn", [])]
         self.symbol_lib = cfg.get("symbol_lib", {})
+        self.no_flag = [(re.compile(r["current"]), re.compile(r["proposed"])) for r in cfg.get("no_flag", [])]
         self.unresolved = [r["category"] for r in cfg.get("keyword", []) + cfg.get("mpn", []) if self._resolve(r["category"]) is None]
 
     def _resolve(self, name: str) -> str | None:
@@ -366,6 +367,18 @@ class Classifier:
             merged.evidence["symbol_conflict"] = True
         return self._decide(p, merged)
 
+    def _may_flag(self, current_id: str, c: Candidate) -> bool:
+        """推翻已有分类要更严：
+        - 至少两层证据一致（规则+近邻），或经大模型仲裁；单条规则或单靠近邻不行（实测会成批误判：处理器描述里的"DDR2/3"→存储器）
+        - 建议分类是原分类的上级（原分类更细）不算错
+        - 命中 rules.yaml 的 no_flag 成对清单（预偏置→单管、阵列→单管、LED 驱动器→DC-DC 等）不算错"""
+        if "+" not in c.method and "llm" not in c.method:
+            return False
+        cur, new = self.tax.path(current_id), self.tax.path(c.category_id)
+        if cur.startswith(new + " > "):
+            return False
+        return not any(a.search(cur) and b.search(new) for a, b in self.rules.no_flag)
+
     def _decide(self, p: Part, c: Candidate) -> Proposal:
         pol = self.policy
         label = self.tax.path(c.category_id)
@@ -378,7 +391,7 @@ class Classifier:
                 action, tags = "skip", ["待分类"]          # 猜测太弱，只打标签不出建议
         elif c.category_id == p.category_id:
             action, tags = "ok", []
-        elif c.conf >= pol.flag_min:
+        elif c.conf >= pol.flag_min and self._may_flag(p.category_id, c):
             action, tags = "flag_mismatch", ["分类疑似错误"]
             c.evidence["current_path"] = self.tax.path(p.category_id)
         else:
