@@ -170,6 +170,51 @@ class EzFootprint(Base):
     fetched_at = Column(DateTime, default=datetime.utcnow)
 
 
+class OshwBom(Base):
+    """开源硬件工作区的一个工程文件（BOM），来自后端导出的 CSV（docs/OSHW_EXPORT.md）。"""
+    __tablename__ = "oshw_boms"
+    bom_id = Column(String(40), primary_key=True)
+    bom_no = Column(String(40))
+    project_id = Column(String(40), index=True)
+    project_name = Column(String(300))
+    project_category = Column(String(120))
+    repo = Column(String(300))                         # 从 notes 解析的 GitHub 仓库
+    commit_ = Column("commit_sha", String(60))
+    subdir = Column(String(500))
+    license = Column(String(80))
+    eda_tool = Column(String(20))
+    parse_status = Column(String(20))
+    zip_file_id = Column(String(40))
+    zip_url = Column(Text)                             # 签名链接，第二阶段下载 zip 用
+
+
+class OshwItem(Base):
+    """开源工程 BOM 行（ezPLM 已从工程解析出的 value / mpn / 封装 / 位号）。"""
+    __tablename__ = "oshw_items"
+    item_id = Column(String(40), primary_key=True)
+    bom_id = Column(String(40), index=True)
+    value = Column(String(300))
+    mpn = Column(String(200))
+    manufacturer = Column(String(200))
+    footprint = Column(String(300))
+    designators = Column(Text)
+    quantity = Column(Integer)
+    part_id = Column(String(40))
+    key_norm = Column(String(200), index=True)         # 用来匹配的规范化型号（mpn 优先，否则 value）；空 = 不参与匹配
+
+
+class OshwMatch(Base):
+    """开源 BOM 行 ↔ 暂存物料 的匹配结果（oshw-match 每次重建）。"""
+    __tablename__ = "oshw_matches"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    part_id = Column(String(40), index=True)
+    item_id = Column(String(40), index=True)
+    bom_id = Column(String(40))
+    how = Column(String(20))                           # mpn / value / generic
+    footprint = Column(String(300))
+    package_check = Column(String(10))                 # same / unknown（generic 匹配必须 same）
+
+
 class IhsParamMap(Base):
     """某个 ezPLM 分类的 "IHS 参数列 → 关键参数" 映射（模型生成草稿，人工确认后才用于填参数）。"""
     __tablename__ = "ihs_param_maps"

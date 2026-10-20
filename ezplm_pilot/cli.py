@@ -19,6 +19,8 @@ python -m ezplm_pilot.cli ihs-load --dir <IHS数据目录> [--families _IC]     
 python -m ezplm_pilot.cli ihs-match                                                       # 只跑 IHS 模块，给已处理物料补出建议
 python -m ezplm_pilot.cli ihs-candidates --dir <IHS数据目录> [--sample 500] [--exclude-mfr X]   # IHS 有、ezPLM 没有的在产 IC → out/ihs_candidates*.csv
 python -m ezplm_pilot.cli ihs-candidates --from-csv out/ihs_candidates.csv --exclude-mfr X  # 不连库，从已导出的候选重新抽样
+python -m ezplm_pilot.cli oshw-load --csv <开源工作区BOM导出.csv>                        # 导入开源硬件工程 BOM 行（docs/OSHW_EXPORT.md）
+python -m ezplm_pilot.cli oshw-match                                                      # 按型号匹配开源工程 → 封装建议（不用大模型）
 python -m ezplm_pilot.cli dedupe                                                          # 作废重复的待复核建议
 暂存库默认 ./staging.sqlite，可设 EZPLM_STAGING_DB=postgresql://user:pw@host/db
 
@@ -203,6 +205,18 @@ def cmd_ezplm_lib(a):
     print(json.dumps(res, ensure_ascii=False, indent=1))
 
 
+def cmd_oshw_load(a):
+    from .oshw import load_csv
+    from .staging import get_session
+    print(json.dumps(load_csv(a.csv, get_session()), ensure_ascii=False, indent=1))
+
+
+def cmd_oshw_match(a):
+    from .oshw import match
+    from .staging import get_session
+    print(json.dumps(match(get_session(), auto_min=a.auto_min), ensure_ascii=False, indent=1))
+
+
 def cmd_dedupe(a):
     from . import pipeline
     pipeline.dedupe_pending(log=print)
@@ -238,6 +252,8 @@ def main(argv=None):
     s = sub.add_parser("ihs-match"); s.add_argument("--batch", type=int, default=500); s.add_argument("--all", action="store_true", help="也对 IHS 无记录的物料做厂商谱系提示"); s.set_defaults(fn=cmd_ihs_match)
     s = sub.add_parser("ihs-candidates"); s.add_argument("--dir"); s.add_argument("--from-csv", help="从已导出的 ihs_candidates.csv 重新抽样/统计，不连库"); s.add_argument("--exclude-mfr", action="append", default=[], help="排除的厂商（当前厂商或 IHS 原名），可重复，如 --exclude-mfr 'DATA DEVICE CORP'"); s.add_argument("--out", help="输出目录（默认 out/）"); s.add_argument("--sample", type=int, default=500); s.add_argument("--seed", type=int, default=42, help="抽样随机种子（固定则每次抽到同一批）"); s.add_argument("--workers", type=int); s.add_argument("--allow-empty", action="store_true", help="暂存库物料很少时也继续（本地测试用）"); s.set_defaults(fn=cmd_ihs_candidates)
     s = sub.add_parser("ezplm-lib"); s.set_defaults(fn=cmd_ezplm_lib)
+    s = sub.add_parser("oshw-load"); s.add_argument("--csv", required=True, help="后端导出的开源工作区 BOM 行（docs/OSHW_EXPORT.md）"); s.set_defaults(fn=cmd_oshw_load)
+    s = sub.add_parser("oshw-match"); s.add_argument("--auto-min", type=float, default=0.85); s.set_defaults(fn=cmd_oshw_match)
     s = sub.add_parser("dedupe"); s.set_defaults(fn=cmd_dedupe)
     s = sub.add_parser("serve"); s.add_argument("--host", default="0.0.0.0"); s.add_argument("--port", type=int, default=8080); s.set_defaults(fn=cmd_serve)
 

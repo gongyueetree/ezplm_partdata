@@ -185,6 +185,11 @@ JOBS = """{% extends "base" %}{% block body %}
 当前：厂商 {{ ezc.companies }} / 符号 {{ ezc.symbols }} / 封装 {{ ezc.footprints }}。只读拉取，整表重拉约几分钟。</p>
 <form class=inline method=post action="/jobs/start"><input type=hidden name=kind value=ezplm-lib><button class=pri {{ 'disabled' if busy }}>从 ezPLM 拉取厂商、符号、封装清单</button></form></div>
 
+<div class=panel><h2>开源硬件工程（封装）</h2>
+<p class=mute>开源工作区约 1.4 万个 KiCad 工程的 BOM 行（后端导出 CSV，本地 <code>cli oshw-load</code> 导入）：已导入 BOM 行 {{ oshw.items }} 条（{{ oshw.boms }} 个工程文件）。
+按型号（mpn 或 value 里的完整型号；通用型号需封装一致）匹配物料，按工程数投票，给还没有封装的物料出封装建议。纯规则，可重复执行。</p>
+<form class=inline method=post action="/jobs/start"><input type=hidden name=kind value=oshw-match><button class=pri {{ 'disabled' if busy or not oshw.items }}>按型号匹配开源工程</button></form></div>
+
 <div class=panel><h2>IHS 参数（试点）</h2>
 <p class=mute>按分类让模型生成"IHS 参数列 → 关键参数"映射（每个分类调用一次），到 分类 → IHS 映射 页人工确认后，再写参数。
 映射：草稿 {{ imap.get('draft', 0) }} / 已确认 {{ imap.get('approved', 0) }}；已写参数 {{ n_pparams }} 个。</p>
@@ -496,7 +501,7 @@ def jobs_page(request: Request, user: str = Depends(auth)):
     imap = dict(dbj.execute(select(IhsParamMap.status, func.count()).group_by(IhsParamMap.status)).all())
     n_pparams = dbj.execute(select(func.count(PartParam.id))).scalar() or 0
     return render("jobs", request, title="任务控制", nav="jobs", user=user, s=pipeline.summary(), cfg=settings.get_all(), job=job, ihs_n=IhsMatcher.n_ref(dbj),
-                  imap=imap, n_pparams=n_pparams, ezc=_ez_counts(dbj),
+                  imap=imap, n_pparams=n_pparams, ezc=_ez_counts(dbj), oshw=_oshw_counts(dbj),
                   history=[h.to_dict() for h in manager.history], lib=_lib_stats(), sources=sources,
                   status_zh={"queued": "排队中", "running": "运行中", "done": "已完成", "failed": "失败", "stopped": "已停止"})
 
@@ -546,6 +551,25 @@ def _ez_counts(db) -> dict:
         return {"companies": 0, "symbols": 0, "footprints": 0}
 
 
+def _oshw_counts(db) -> dict:
+    from .staging import OshwBom, OshwItem
+    try:
+        return {"items": db.execute(select(func.count(OshwItem.item_id))).scalar() or 0, "boms": db.execute(select(func.count(OshwBom.bom_id))).scalar() or 0}
+    except Exception:  # noqa
+        return {"items": 0, "boms": 0}
+
+
+def _run_oshw_match(job):
+    from .oshw import match
+    from .staging import get_session as new_session
+    cfg = settings.get_all()
+    db = new_session()
+    try:
+        return match(db, log=job.say, auto_min=float(cfg["auto_fill_min"]), job=job.id, stop=job.should_stop)
+    finally:
+        db.close()
+
+
 def _run_ezplm_lib(job):
     from .ezplm_lib import overlap_with_kicad, pull
     from .kicad import LibIndex
@@ -588,6 +612,8 @@ async def jobs_start(request: Request, user: str = Depends(auth)):
             if not f.get("path"):
                 return back("/jobs", "请填写仓库地址或目录", True)
             manager.start("scan", lambda j: _run_scan(j, f["path"].strip(), f.get("source_kind", "community")), {"path": f["path"], "kind": f.get("source_kind")})
+        elif kind == "oshw-match":
+            manager.start("oshw-match", _run_oshw_match, {})
         elif kind == "ezplm-lib":
             manager.start("ezplm-lib", _run_ezplm_lib, {})
         elif kind == "ihs-maps":
