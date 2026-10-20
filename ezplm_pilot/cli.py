@@ -193,6 +193,16 @@ def cmd_ihs_candidates(a):
     print(json.dumps(res, ensure_ascii=False, indent=1))
 
 
+def cmd_ezplm_lib(a):
+    from .ezplm_lib import overlap_with_kicad, pull
+    from .kicad import LibIndex
+    from .staging import get_session
+    db = get_session()
+    res = pull(ApiSource(), db, log=print)
+    res["overlap"] = overlap_with_kicad(db, LibIndex(LIBINDEX_PATH) if LIBINDEX_PATH.exists() else None)
+    print(json.dumps(res, ensure_ascii=False, indent=1))
+
+
 def cmd_dedupe(a):
     from . import pipeline
     pipeline.dedupe_pending(log=print)
@@ -227,6 +237,7 @@ def main(argv=None):
     s = sub.add_parser("ihs-load"); s.add_argument("--dir", required=True, help="含 2011-12-09 - Initial Load 等批次子目录的 IHS 数据目录"); s.add_argument("--families", default="", help="整类导入的 IHS 大类正则，如 _IC"); s.add_argument("--workers", type=int); s.add_argument("--start", type=int, default=1, help="从第几个文件开始（日志 [i/93] 编号），中断后续跑"); s.set_defaults(fn=cmd_ihs_load)
     s = sub.add_parser("ihs-match"); s.add_argument("--batch", type=int, default=500); s.add_argument("--all", action="store_true", help="也对 IHS 无记录的物料做厂商谱系提示"); s.set_defaults(fn=cmd_ihs_match)
     s = sub.add_parser("ihs-candidates"); s.add_argument("--dir"); s.add_argument("--from-csv", help="从已导出的 ihs_candidates.csv 重新抽样/统计，不连库"); s.add_argument("--exclude-mfr", action="append", default=[], help="排除的厂商（当前厂商或 IHS 原名），可重复，如 --exclude-mfr 'DATA DEVICE CORP'"); s.add_argument("--out", help="输出目录（默认 out/）"); s.add_argument("--sample", type=int, default=500); s.add_argument("--seed", type=int, default=42, help="抽样随机种子（固定则每次抽到同一批）"); s.add_argument("--workers", type=int); s.add_argument("--allow-empty", action="store_true", help="暂存库物料很少时也继续（本地测试用）"); s.set_defaults(fn=cmd_ihs_candidates)
+    s = sub.add_parser("ezplm-lib"); s.set_defaults(fn=cmd_ezplm_lib)
     s = sub.add_parser("dedupe"); s.set_defaults(fn=cmd_dedupe)
     s = sub.add_parser("serve"); s.add_argument("--host", default="0.0.0.0"); s.add_argument("--port", type=int, default=8080); s.set_defaults(fn=cmd_serve)
 

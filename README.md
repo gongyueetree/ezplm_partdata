@@ -105,6 +105,9 @@ python -m ezplm_pilot.cli ihs-match                                  # 给已处
 - **IHS 参数**（`ezplm_pilot/ihs_params.py`）：每个分类调用一次大模型，生成"IHS 参数列 → 该分类关键参数"的映射表（含单位换算、枚举对应），
   在 分类 → IHS 映射 页预览、修改、确认后，由规则给该分类所有可靠匹配（L1–L3）的物料写参数（`part_params` 表，可导出 CSV）。
   任务控制里可按分类路径批量生成试点分类的映射草稿。参数暂不回写 ezPLM（需后端支持物料属性）
+- **ezPLM 基础数据**（`ezplm_pilot/ezplm_lib.py`，任务控制 / `cli ezplm-lib`）：只读拉取 ezPLM 的厂商（含别名、制造商/代理商标记）、符号、封装清单。
+  厂商以 ezPLM 的名称和别名为标准（谱系只补收购关系，代理商不当厂商）；以型号命名的 ezPLM 符号按型号直接匹配；
+  符号/封装建议标出 ezPLM ID，ezPLM 没有的打"需新建"。参数不用 ezPLM 的属性，以平台各分类的关键参数为准
 - **新增候选** `cli ihs-candidates --dir <IHS数据目录>`：IHS 里 2012 年仍在产、不是电源模块/军标图号、ezPLM 里还没有的 IC 型号（同型号+同当前厂商只留一条）→
   `out/ihs_candidates.csv`（约 110 万行，超过 Excel 行数上限，请用脚本/数据库打开）、`ihs_candidates_summary.csv`（按大类/分类/厂商统计）、
   `ihs_candidates_sample500.csv`（固定随机种子抽样，带 DigiKey/Mouser 查询链接和"当前状态"空列，人工核对后可估算 14 年后的仍有效比例）

@@ -180,6 +180,11 @@ JOBS = """{% extends "base" %}{% block body %}
 <label><input type=checkbox name=all value=1> 也检查 IHS 无记录的物料的厂商名（提示已被并购的旧厂商名）</label>
 <p><button class=pri {{ 'disabled' if busy or not ihs_n }}>补跑 IHS 匹配</button></p></form></div>
 
+<div class=panel><h2>ezPLM 基础数据（厂商 / 符号 / 封装）</h2>
+<p class=mute>以 ezPLM 自己的库为准：厂商名和别名作为厂商标准；符号/封装建议标出 ezPLM ID，ezPLM 没有的打"需新建"；以型号命名的 ezPLM 符号直接按型号匹配。
+当前：厂商 {{ ezc.companies }} / 符号 {{ ezc.symbols }} / 封装 {{ ezc.footprints }}。只读拉取，整表重拉约几分钟。</p>
+<form class=inline method=post action="/jobs/start"><input type=hidden name=kind value=ezplm-lib><button class=pri {{ 'disabled' if busy }}>从 ezPLM 拉取厂商、符号、封装清单</button></form></div>
+
 <div class=panel><h2>IHS 参数（试点）</h2>
 <p class=mute>按分类让模型生成"IHS 参数列 → 关键参数"映射（每个分类调用一次），到 分类 → IHS 映射 页人工确认后，再写参数。
 映射：草稿 {{ imap.get('draft', 0) }} / 已确认 {{ imap.get('approved', 0) }}；已写参数 {{ n_pparams }} 个。</p>
@@ -491,7 +496,7 @@ def jobs_page(request: Request, user: str = Depends(auth)):
     imap = dict(dbj.execute(select(IhsParamMap.status, func.count()).group_by(IhsParamMap.status)).all())
     n_pparams = dbj.execute(select(func.count(PartParam.id))).scalar() or 0
     return render("jobs", request, title="任务控制", nav="jobs", user=user, s=pipeline.summary(), cfg=settings.get_all(), job=job, ihs_n=IhsMatcher.n_ref(dbj),
-                  imap=imap, n_pparams=n_pparams,
+                  imap=imap, n_pparams=n_pparams, ezc=_ez_counts(dbj),
                   history=[h.to_dict() for h in manager.history], lib=_lib_stats(), sources=sources,
                   status_zh={"queued": "排队中", "running": "运行中", "done": "已完成", "failed": "失败", "stopped": "已停止"})
 
@@ -533,6 +538,29 @@ def _run_scan(job, path, source_kind):
     return {"symbols": len(res["symbols"]), "footprints": len(res["footprints"]), "instances": len(res["instances"]), "errors": len(res["errors"]), "index": idx.stats()}
 
 
+def _ez_counts(db) -> dict:
+    from .ezplm_lib import EzLibrary
+    try:
+        return EzLibrary.count(db)
+    except Exception:  # noqa
+        return {"companies": 0, "symbols": 0, "footprints": 0}
+
+
+def _run_ezplm_lib(job):
+    from .ezplm_lib import overlap_with_kicad, pull
+    from .kicad import LibIndex
+    from .staging import get_session as new_session
+    db = new_session()
+    try:
+        res = pull(settings.api_source(), db, log=job.say, stop=job.should_stop)
+        idx = LibIndex(settings.LIBINDEX_PATH) if settings.LIBINDEX_PATH.exists() else None
+        res["overlap"] = overlap_with_kicad(db, idx)
+        job.say(f"与平台已扫描的 KiCad 库按名称重合：{res['overlap']}")
+        return res
+    finally:
+        db.close()
+
+
 def _run_ihs(job, all_parts):
     cfg = settings.get_all()
     return pipeline.ihs_match(only_matched=not all_parts, job=job.id, stop=job.should_stop, log=job.say,
@@ -560,6 +588,8 @@ async def jobs_start(request: Request, user: str = Depends(auth)):
             if not f.get("path"):
                 return back("/jobs", "请填写仓库地址或目录", True)
             manager.start("scan", lambda j: _run_scan(j, f["path"].strip(), f.get("source_kind", "community")), {"path": f["path"], "kind": f.get("source_kind")})
+        elif kind == "ezplm-lib":
+            manager.start("ezplm-lib", _run_ezplm_lib, {})
         elif kind == "ihs-maps":
             from . import ihs_params as IP
             call = _llm_call_or_none()

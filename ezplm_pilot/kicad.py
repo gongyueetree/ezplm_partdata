@@ -527,8 +527,9 @@ def propose_footprints_by_mpn(parts: Iterable[Part], index: LibIndex, auto_min: 
                        {"source": source, "alternatives": [f"{h[1]}:{h[0]}" for h in hits[1:4]]}, ["封装自动匹配"] if action == "auto_fill" else ["封装待复核"])
 
 
-def propose_symbols(parts: Iterable[Part], index: LibIndex, auto_min: float = 0.85) -> Iterator[Proposal]:
-    m = SymbolMatcher(index)
+def propose_symbols(parts: Iterable[Part], index: LibIndex, auto_min: float = 0.85, matcher: "SymbolMatcher | None" = None) -> Iterator[Proposal]:
+    """matcher 可复用：构建一次要把整个符号索引读进内存（2 万多个符号约 1 秒），每批重建很浪费。"""
+    m = matcher or SymbolMatcher(index)
     for p in parts:
         if p.symbol:
             continue

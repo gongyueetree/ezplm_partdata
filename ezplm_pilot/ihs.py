@@ -60,7 +60,18 @@ def mfr_key(name: str) -> str:
 
 # --------------------------------------------------------------------------- 厂商谱系
 class Lineage:
-    def __init__(self, path: str | Path = LINEAGE_PATH):
+    def __init__(self, path: str | Path = LINEAGE_PATH, db=None):
+        """db 给出时读入 ezPLM 厂商表（ez_companies）：ezPLM 的厂商名和别名是标准，谱系只补收购关系。"""
+        self.ez_alias: dict[str, tuple[str, bool]] = {}         # mfr_key(别名) -> (ezPLM 厂商名, 只是代理商)
+        if db is not None:
+            try:
+                from .ezplm_lib import company_aliases
+                for alias, name, only_supplier in company_aliases(db):
+                    k = mfr_key(alias)
+                    if k and (k not in self.ez_alias or self.ez_alias[k][1]):    # 同名时制造商优先于代理商
+                        self.ez_alias[k] = (name, only_supplier)
+            except Exception:  # noqa —— 表还不存在（没拉过 ezPLM 厂商）时退回 YAML 规则
+                self.ez_alias = {}
         cfg = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
         self.canon = [(re.compile(c["match"], re.I), c["name"]) for c in cfg.get("canonical", [])]
         self.entries: dict[str, dict] = {}
@@ -75,11 +86,18 @@ class Lineage:
                 self.matchers.append((re.compile(e["match"], re.I), e))
         self._cache: dict = {}
 
+    def _ez(self, name: str) -> str | None:
+        hit = self.ez_alias.get(mfr_key(name))
+        return hit[0] if hit and not hit[1] else None             # 只是代理商的不当厂商用
+
     def canonical(self, name: str) -> str:
         name = (name or "").strip()
+        ez = self._ez(name)
+        if ez:
+            return ez
         for pat, n in self.canon:
             if pat.search(name):
-                return n
+                return self._ez(n) or n                          # YAML 规范名再落到 ezPLM 的厂商名上
         return name
 
     def entry(self, name: str) -> dict | None:
@@ -191,7 +209,7 @@ def load(ihs_dir: str | Path, families: str = "", workers: int | None = None, st
     files = sorted(str(p) for p in Path(ihs_dir).glob("*/*.csv.gz"))
     if not files:
         raise FileNotFoundError(f"{ihs_dir} 下没有找到 */*.csv.gz")
-    lin = Lineage()
+    lin = Lineage(db=db)
     stats = {"files": len(files), "rows": 0, "parts_matched": 0}
     if start > 1:
         log(f"从第 {start} 个文件续跑：{Path(files[start - 1]).parent.name[:10]} {Path(files[start - 1]).name}")
@@ -329,10 +347,10 @@ def candidates(ihs_dir: str | Path, out_dir: str | Path, sample: int = 500, seed
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    lin = Lineage()
+    db = get_session()
+    lin = Lineage(db=db)
     cur_key = lambda name, fam="": mfr_key(lin.resolve(name, fam)["current"])
 
-    db = get_session()
     ezplm: dict[str, set] = {}                 # mpn_norm -> {当前厂商键}；"" 表示厂商为空
     names: dict[tuple, str] = {}
     n_parts = 0
@@ -401,7 +419,7 @@ def candidates(ihs_dir: str | Path, out_dir: str | Path, sample: int = 500, seed
 class IhsMatcher:
     def __init__(self, db, tax=None, pkg=None, auto_min: float = 0.85, lineage: Lineage | None = None):
         self.db, self.tax, self.pkg, self.auto_min = db, tax, pkg, auto_min
-        self.lineage = lineage or Lineage()
+        self.lineage = lineage or Lineage(db=db)
         self.best: dict[str, tuple] = {}          # part_id -> (IhsRef, level, conf)
 
     @staticmethod
@@ -430,12 +448,12 @@ class IhsMatcher:
         out = []
         fam = family_hint(self._root(p))
         mine = self.lineage.resolve(p.manufacturer, fam) if p.manufacturer else None
-        currents = {mfr_key(r.mfr_current) for r in rows}
+        currents = {mfr_key(self.lineage.resolve(r.mfr_ihs, r.family)["current"]) for r in rows}
         for r in rows:
             exact = (r.mpn or "").strip().upper() == (p.mpn or "").strip().upper()
             if not mine:
                 level, conf = "L4", (0.70 if len(currents) == 1 else 0.45)
-            elif mfr_key(r.mfr_current) != mfr_key(mine["current"]):
+            elif mfr_key(self.lineage.resolve(r.mfr_ihs, r.family)["current"]) != mfr_key(mine["current"]):
                 level, conf = "L5", 0.30
             elif self.lineage.resolve(r.mfr_ihs, r.family)["origin"] == mine["origin"]:
                 level, conf = ("L1", 0.97) if exact else ("L2", 0.93)

@@ -134,6 +134,42 @@ class IhsRef(Base):
     batch = Column(String(10))                         # 数据批次日期
 
 
+class EzCompany(Base):
+    """ezPLM 的厂商 / 代理商（/admin-api/companies）。平台以它为厂商标准。"""
+    __tablename__ = "ez_companies"
+    id = Column(String(40), primary_key=True)
+    name = Column(String(200), index=True)
+    aliases_json = Column(Text)                        # ["TI", "德州仪器", ...]
+    website = Column(String(300))
+    is_manufacturer = Column(Boolean, default=True)
+    is_supplier = Column(Boolean, default=False)
+    status = Column(String(20))
+    fetched_at = Column(DateTime, default=datetime.utcnow)
+
+
+class EzSymbol(Base):
+    """ezPLM 符号库清单（/admin-api/symbols）。不少符号以型号命名、派生自通用根符号（root）。"""
+    __tablename__ = "ez_symbols"
+    id = Column(String(40), primary_key=True)
+    name = Column(String(200), index=True)
+    norm = Column(String(200), index=True)             # kicad.norm_name(name)，与型号规范化方式一致
+    category = Column(String(120))                     # 符号库/分类，如 Transistor_BJT
+    root_id = Column(String(40))
+    root_name = Column(String(200))
+    fetched_at = Column(DateTime, default=datetime.utcnow)
+
+
+class EzFootprint(Base):
+    """ezPLM 封装库清单（/admin-api/footprints）。"""
+    __tablename__ = "ez_footprints"
+    id = Column(String(40), primary_key=True)
+    name = Column(String(200), index=True)
+    category = Column(String(120))                     # 如 Package_TO_SOT_SMD
+    has_3d = Column(Boolean, default=False)
+    has_pdf = Column(Boolean, default=False)
+    fetched_at = Column(DateTime, default=datetime.utcnow)
+
+
 class IhsParamMap(Base):
     """某个 ezPLM 分类的 "IHS 参数列 → 关键参数" 映射（模型生成草稿，人工确认后才用于填参数）。"""
     __tablename__ = "ihs_param_maps"

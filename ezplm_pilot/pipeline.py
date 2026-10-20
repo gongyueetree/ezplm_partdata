@@ -199,6 +199,11 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
     idx = LibIndex(libindex) if Path(libindex).exists() else None
     ihs = IhsMatcher(db, tax=tax, pkg=pkg, auto_min=auto_fill_min)
     log(f"IHS 参考记录 {IhsMatcher.n_ref(db)} 条（无记录时只做厂商谱系提示）")
+    from .kicad import SymbolMatcher
+    from .ezplm_lib import EzLibrary
+    sym_matcher = SymbolMatcher(idx) if idx else None
+    ezlib = EzLibrary(db)
+    log("ezPLM 库：" + ("未拉取（符号/封装建议不标是否已在 ezPLM）" if ezlib.empty else f"符号 {len(ezlib.sym_by_name)} / 封装 {len(ezlib.fp_by_name)}；厂商标准 {len(ihs.lineage.ez_alias)} 个名称/别名"))
 
     stats = {"job": job, "batches": 0, "parts": 0, "proposals": 0, "auto_fill": 0, "flag_mismatch": 0, "review": 0}
     while True:
@@ -247,7 +252,9 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
         props: list[Proposal] = []
         for name, fn in (("分类", lambda: clf.classify_many(parts)), ("封装(MPN映射)", lambda: list(propose_footprints_by_mpn(parts, idx)) if idx else []),
                          ("封装", lambda: list(pkg.propose(parts, attrs))),
-                         ("符号", lambda: list(propose_symbols(parts, idx)) if idx else []), ("链接", lambda: list(urlf.propose(parts)) if urlf else []),
+                         ("ezPLM 符号", lambda: ezlib.propose_symbols_by_mpn(parts, auto_fill_min)),
+                         ("符号", lambda: list(propose_symbols([p for p in parts if p.id not in {x.part_id for x in props if x.field == "symbol"}], idx, matcher=sym_matcher)) if idx else []),
+                         ("链接", lambda: list(urlf.propose(parts)) if urlf else []),
                          ("IHS", lambda: _ihs_props(ihs, parts, by_id, props))):
             t1 = time.perf_counter()
             try:
@@ -255,6 +262,8 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
             except Exception as e:  # noqa  —— 单个模块出错不影响本批其它模块
                 log(f"  ! {name}模块出错，本批跳过该模块：{str(e)[:200]}")
             timing[name] = time.perf_counter() - t1
+        if not ezlib.empty:
+            ezlib.annotate(props)                # 符号/封装建议标出 ezPLM ID，或打"需新建"
         t1 = time.perf_counter()
         # 重跑时作废上一轮同物料、同字段的待复核建议，避免重复
         old = db.execute(select(StagedProposal).where(StagedProposal.part_id.in_(list(by_id)), StagedProposal.review_status == "pending")).scalars().all()
