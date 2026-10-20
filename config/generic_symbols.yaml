@@ -1,0 +1,35 @@
+# 缺符号物料分流：这些分类按"分类 + 引脚数"套 KiCad 官方通用符号即可，不需要找型号专用符号（symgap.py）。
+# path：分类路径正则（"一级 > 二级 > …"，new 优先于 orig）；desc：可选，描述/型号再过滤；pins：允许的引脚数（空 = 不限/未知也可）；
+# symbol：KiCad 库:符号名，{n} 换成引脚数、{n2} 换成引脚数/2（双排）；conf：建议置信度。按顺序取第一条命中。
+# unknown: true 表示拿不到引脚数时也按通用处理（置信度 -0.05）；没有该标记时引脚数未知就算专用。
+# 不在这里的分类一律算"专用"（specific），走 symmatch 型号匹配。
+rules:
+  # ---------------- 电阻 / 电位器
+  - {path: "^电阻器 > (单个电阻器|片式贴装电阻器|通孔电阻器|底座安装电阻器|特种电阻器)", pins: [2], symbol: "Device:R", unknown: true, conf: 0.92}
+  - {path: "^电位计，可变电阻器", pins: [3], symbol: "Device:R_Potentiometer", unknown: true, conf: 0.85}
+  # ---------------- 电容
+  - {path: "^电容器 > (铝电解电容器|铝聚合物电容器|钽电容器|钽聚合物电容器|超级电容器)", pins: [2], symbol: "Device:C_Polarized", unknown: true, conf: 0.9}
+  - {path: "^电容器 > (电容器-单个电容器|陶瓷电容器|薄膜电容器|硅电容器)", pins: [2], symbol: "Device:C", unknown: true, conf: 0.92}
+  - {path: "^滤波器 > 馈通式电容器", pins: [3], symbol: "Device:C_Feedthrough", conf: 0.8}
+  # ---------------- 电感 / 磁珠
+  - {path: "^电感器，线圈，扼流圈 > (单个电感器|固定电感器|可调电感器)", pins: [2], symbol: "Device:L", unknown: true, conf: 0.9}
+  - {path: "^滤波器 > 铁氧体磁珠和芯片", pins: [2], symbol: "Device:FerriteBead", unknown: true, conf: 0.9}
+  # ---------------- 晶体
+  - {path: "^晶体，振荡器，谐振器 > 晶体（无源晶振）", pins: [2], symbol: "Device:Crystal", conf: 0.9}
+  - {path: "^晶体，振荡器，谐振器 > 晶体（无源晶振）", pins: [4], symbol: "Device:Crystal_GND24", conf: 0.8}
+  # ---------------- 电路保护（两端器件）
+  - {path: "^电路保护 > PTC 可复位保险丝", pins: [2], symbol: "Device:Polyfuse", unknown: true, conf: 0.9}
+  - {path: "^电路保护 > (保险丝和过流保护|热熔断体（热熔保险丝）)", pins: [2], symbol: "Device:Fuse", unknown: true, conf: 0.88}
+  - {path: "^电路保护 > 压敏电阻", pins: [2], symbol: "Device:Varistor", unknown: true, conf: 0.9}
+  - {path: "^电路保护 > 瞬态电压抑制器（TVS）", pins: [2], symbol: "Device:D_TVS", conf: 0.85}
+  # ---------------- 两脚二极管 / LED（多脚、阵列的走专用）
+  - {path: "^分立半导体产品 > 二极管", desc: "肖特基|Schottky", pins: [2], symbol: "Device:D_Schottky", conf: 0.88}
+  - {path: "^分立半导体产品 > 二极管", desc: "齐纳|稳压|Zener", pins: [2], symbol: "Device:D_Zener", conf: 0.88}
+  - {path: "^分立半导体产品 > 二极管", desc: "TVS|瞬态", pins: [2], symbol: "Device:D_TVS", conf: 0.85}
+  - {path: "^分立半导体产品 > 二极管", pins: [2], symbol: "Device:D", conf: 0.85}
+  - {path: "^光电器件 > LED 发射器", pins: [2], symbol: "Device:LED", conf: 0.88}
+  # ---------------- 排针 / 排母（单排按引脚数；双排要求封装或描述里写明 2xNN）
+  - {path: "^连接器，互连器件 > (排针|排母)", desc: "2[xX×*]\\d+|双排", pins: [], symbol: "Connector_Generic:Conn_02x{n2}_Odd_Even", conf: 0.8}
+  - {path: "^连接器，互连器件 > (排针|排母)", pins: [], symbol: "Connector_Generic:Conn_01x{n}", conf: 0.8}
+  # ---------------- 两脚轻触开关
+  - {path: "^开关 > (轻触开关|按键开关)", pins: [2], symbol: "Switch:SW_Push", conf: 0.85}

@@ -112,6 +112,27 @@ python -m ezplm_pilot.cli ihs-match                                  # 给已处
   `out/ihs_candidates.csv`（约 110 万行，超过 Excel 行数上限，请用脚本/数据库打开）、`ihs_candidates_summary.csv`（按大类/分类/厂商统计）、
   `ihs_candidates_sample500.csv`（固定随机种子抽样，带 DigiKey/Mouser 查询链接和"当前状态"空列，人工核对后可估算 14 年后的仍有效比例）
 
+## 2c. 原理图符号批量补齐（第 1 阶段：缺口表 + 现有符号仓库匹配）
+
+整体方案见桌面 `PartData/symbol_fill_plan.md`。思路：不按型号逐个上网搜，而是先把能拿到的符号收进本地符号仓库，再离线拿全部缺符号物料去匹配。
+
+```bash
+# DATABASE_URL 指向平台 Postgres（本地跑即可）
+python -m ezplm_pilot.cli symgap                      # 缺口表 → out/symbol_gap.csv + symbol_gap_summary.csv（通用/专用分流）
+python -m ezplm_pilot.cli symgap --propose-generic    # 同上，并给"通用"件出 KiCad 通用符号建议（Device:R / C / D_Zener / Conn_01xNN …）
+python -m ezplm_pilot.cli symindex                    # 符号仓库 PartData/symbols_all（16.4 万个 MPN 命名的 .kicad_sym）→ DATA_DIR/symindex.sqlite
+python -m ezplm_pilot.cli symmatch --dry-run          # 只出 out/symbol_matches.csv 和 out/symbol_coverage.html（覆盖率报告）
+python -m ezplm_pilot.cli symmatch                    # 写建议：A 级且置信度 ≥0.88 自动写入，B/C 级进复核；符号文件存进 symbol_files
+python -m ezplm_pilot.cli symmatch --dry-run --gap-csv out/symbol_gap.csv   # 不连库，直接拿导出的缺口表跑
+```
+
+- **分流**（`symgap.py`，规则在 `config/generic_symbols.yaml`）：电阻、电容、电感、磁珠、两脚二极管/LED、保险丝、压敏、晶体、排针排母、两脚按键
+  按"分类 + 引脚数"套通用符号；引脚数从封装名（或物料属性里的"封装"）解析。其余算"专用"。
+- **匹配**（`symmatch.py`）：精确键 / 包装后缀（T&R、/NOPB、-REEL7、#PBF、NXP 的 Y/K/J/,118）/ Microchip "T-" / NXP 样片前缀（PK→MK、PIMX→MIMX、PS32→S32）/
+  KiCad `x` 与 Microchip `24XX` 通配 → A；基础型号符号 + 封装名一致 → B；只有引脚数一致 → C。封装引脚数与符号冲突直接丢弃，厂商不同（双方确定）降一级并打"厂商不同"。
+  全部是字典查找：在 2 万个 Microchip/NXP/TI/ADI 物料上 1.4 秒跑完，匹配 3,524 个（A 3,003 / B 213 / C 308），按比例 118 万约 1~2 分钟。
+- 可重复执行：已写入的物料不再出现在缺口里；有待复核符号建议的物料跳过；同方法上一轮未复核的建议自动作废。
+
 ## 3. 已知限制 / 下一步
 
 - `kiutils` 对 KiCad 9 新格式个别封装文件解析失败（已加正则兜底数焊盘）；正式跑建议先 `kicad-cli fp upgrade` / `sym upgrade` 统一版本，或改用 `kicad-cli` + sexp 解析

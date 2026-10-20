@@ -22,6 +22,9 @@ python -m ezplm_pilot.cli ihs-candidates --from-csv out/ihs_candidates.csv --exc
 python -m ezplm_pilot.cli oshw-load --csv <开源工作区BOM导出.csv>                        # 导入开源硬件工程 BOM 行（docs/OSHW_EXPORT.md）
 python -m ezplm_pilot.cli oshw-match                                                      # 按型号匹配开源工程 → 封装建议（不用大模型）
 python -m ezplm_pilot.cli symbols-import                                                   # 合并导入三批符号（同事 Send / GPT / Claude）→ 符号建议，引脚冲突进复核
+python -m ezplm_pilot.cli symgap [--propose-generic]                                      # 缺符号缺口表 → out/symbol_gap.csv（通用/专用分流）；可给通用件出通用符号建议
+python -m ezplm_pilot.cli symindex                                                         # 符号仓库（PartData/symbols_all）→ DATA_DIR/symindex.sqlite
+python -m ezplm_pilot.cli symmatch [--dry-run] [--gap-csv out/symbol_gap.csv]             # 专用件按型号匹配符号 → 建议 + out/symbol_matches.csv + out/symbol_coverage.html
 python -m ezplm_pilot.cli dedupe                                                          # 作废重复的待复核建议
 暂存库默认 ./staging.sqlite，可设 EZPLM_STAGING_DB=postgresql://user:pw@host/db
 
@@ -38,7 +41,8 @@ from pathlib import Path
 from .sources import open_source, Writer, ApiSource
 from .models import Proposal
 
-from .settings import OUT_DIR as OUT, LIBINDEX_PATH
+from .settings import OUT_DIR as OUT, LIBINDEX_PATH, DATA_DIR
+SYMINDEX = DATA_DIR / "symindex.sqlite"
 
 
 def _src(a):
@@ -225,6 +229,29 @@ def cmd_symbols_import(a):
     print(json.dumps(run(get_session(), paths, auto_min=a.auto_min), ensure_ascii=False, indent=1))
 
 
+def cmd_symgap(a):
+    from .staging import get_session
+    from . import symgap
+    db = get_session()
+    print(json.dumps(symgap.export(db, a.out or OUT), ensure_ascii=False, indent=1))
+    if a.propose_generic:
+        print(json.dumps(symgap.propose_generic(db, auto_min=a.auto_min), ensure_ascii=False, indent=1))
+
+
+def cmd_symindex(a):
+    from .symmatch import build_index, DEFAULT_ROOT, DEFAULT_INDEX_CSV
+    print(json.dumps(build_index(a.index or SYMINDEX, a.root or DEFAULT_ROOT, a.index_csv or DEFAULT_INDEX_CSV), ensure_ascii=False, indent=1))
+
+
+def cmd_symmatch(a):
+    from .symmatch import run
+    db = None
+    if not a.gap_csv or not a.dry_run:
+        from .staging import get_session
+        db = get_session()
+    print(json.dumps(run(db, a.index or SYMINDEX, a.out or OUT, auto_min=a.auto_min, write=not a.dry_run, gap_csv=a.gap_csv), ensure_ascii=False, indent=1))
+
+
 def cmd_dedupe(a):
     from . import pipeline
     pipeline.dedupe_pending(log=print)
@@ -266,6 +293,11 @@ def main(argv=None):
     for k in ("send-csv", "gpt-xlsx", "gpt-zip", "claude-csv", "claude-dir"):
         s.add_argument(f"--{k}")
     s.add_argument("--auto-min", type=float, default=0.85); s.set_defaults(fn=cmd_symbols_import)
+    s = sub.add_parser("symgap", help="缺符号缺口表（通用/专用分流）"); s.add_argument("--out"); s.add_argument("--propose-generic", action="store_true", help="给通用件出通用符号建议")
+    s.add_argument("--auto-min", type=float, default=0.85); s.set_defaults(fn=cmd_symgap)
+    s = sub.add_parser("symindex", help="符号仓库 → SQLite 索引"); s.add_argument("--root"); s.add_argument("--index-csv"); s.add_argument("--index"); s.set_defaults(fn=cmd_symindex)
+    s = sub.add_parser("symmatch", help="专用件按型号匹配符号"); s.add_argument("--index"); s.add_argument("--out"); s.add_argument("--gap-csv", help="直接读缺口表 CSV（配合 --dry-run 可不连暂存库）")
+    s.add_argument("--dry-run", action="store_true", help="只出匹配表和报告，不写建议"); s.add_argument("--auto-min", type=float, default=0.88); s.set_defaults(fn=cmd_symmatch)
     s = sub.add_parser("dedupe"); s.set_defaults(fn=cmd_dedupe)
     s = sub.add_parser("serve"); s.add_argument("--host", default="0.0.0.0"); s.add_argument("--port", type=int, default=8080); s.set_defaults(fn=cmd_serve)
 
