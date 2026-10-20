@@ -21,39 +21,50 @@ from .staging import EzCompany, EzFootprint, EzSymbol
 PAGE = 100                                   # ezPLM 后台每页上限
 
 
-def _pages(api, path: str, log, **params):
+def _pages(api, path: str, page_size: int = PAGE, **params):
     """按页拉一轮；每页返回 (items, total)。"""
     page = 1
     while True:
-        js = api._get(path, current=page, pageSize=PAGE, **params)
+        js = api._get(path, current=page, pageSize=page_size, **params)
         data = js.get("data", js)
         items = data.get("data") or data.get("items") or []
         total = data.get("total") or 0
         yield items, total
-        if not items or page * PAGE >= total:
+        if not items or page * page_size >= total:
             break
         page += 1
 
 
-def _pull_all(api, path: str, log, stop=None, max_rounds: int = 10, **params) -> list[dict] | None:
-    """拉全表。ezPLM 列表接口的排序在大量相同排序值时不稳定，翻页会重复/漏掉记录（厂商表一轮只拿到 4242 条里的 3215 条），
-    所以一轮拉完不够总数就再拉一轮补漏，最多 max_rounds 轮（厂商表一轮约 43 页，代价很小）。收到停止信号返回 None。"""
+# 补漏策略：ezPLM 列表按创建时间排序，批量导入的记录创建时间相同；同一个查询总是同样地切分这些"并列"的记录，
+# 所以换一种查询（排序字段 / 每页条数）重拉，才能拿到上一轮被挤掉的那些。sort 的格式接口没有文档，不认的会报错，直接跳过。
+ROUND_VARIANTS = [{}, {"sort": "id"}, {"sort": "name"}, {"sort": "-id"}, {"sort": "id:asc"}, {"sort": "name:desc"},
+                  {"page_size": 97}, {"page_size": 89}, {"page_size": 71}, {"page_size": 53}, {"page_size": 37}, {"page_size": 23}, {"page_size": 17}, {"page_size": 13}]
+
+
+def _pull_all(api, path: str, log, stop=None, **params) -> list[dict] | None:
+    """拉全表：第一轮按默认查询；不够总数就依次换查询方式再拉，直到拿全或策略用完。收到停止信号返回 None。
+    （厂商表默认查询一轮只拿到 4242 条里的 3215 条，原样重拉一条也补不到。）"""
     seen: dict[str, dict] = {}
-    total = idle = 0
-    for rnd in range(1, max_rounds + 1):
+    total = 0
+    for k, variant in enumerate(ROUND_VARIANTS, 1):
+        v = dict(variant)
+        page_size = v.pop("page_size", PAGE)
         before = len(seen)
-        for items, total in _pages(api, path, log, **params):
-            for x in items:
-                if x.get("id"):
-                    seen[x["id"]] = x
-            if stop and stop():
-                return None
-        log(f"  {path}：第 {rnd} 轮，累计 {len(seen)} / {total} 条（本轮新增 {len(seen) - before}）")
-        idle = idle + 1 if len(seen) == before else 0
-        if len(seen) >= total or idle >= 2:              # 连续两轮一条没补到就不再拉
+        try:
+            for items, total in _pages(api, path, page_size=page_size, **params, **v):
+                for x in items:
+                    if x.get("id"):
+                        seen[x["id"]] = x
+                if stop and stop():
+                    return None
+        except Exception as e:  # noqa —— 接口不认这种 sort 写法等：换下一种
+            log(f"  {path}：第 {k} 轮（{variant or '默认'}）跳过：{str(e)[:80]}")
+            continue
+        log(f"  {path}：第 {k} 轮（{variant or '默认'}），累计 {len(seen)} / {total} 条（本轮新增 {len(seen) - before}）")
+        if len(seen) >= total:
             break
     if len(seen) < total:
-        log(f"  ! {path}：拉了 {rnd} 轮仍差 {total - len(seen)} 条（接口翻页不稳定），先写入已拿到的")
+        log(f"  ! {path}：试完 {len(ROUND_VARIANTS)} 种查询方式仍差 {total - len(seen)} 条，先写入已拿到的")
     return list(seen.values())
 
 
