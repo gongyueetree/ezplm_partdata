@@ -171,7 +171,7 @@ def cmd_status(a):
 
 def cmd_ihs_load(a):
     from .ihs import load
-    print(json.dumps(load(a.dir, families=a.families, workers=a.workers), ensure_ascii=False))
+    print(json.dumps(load(a.dir, families=a.families, workers=a.workers, start=a.start), ensure_ascii=False))
 
 
 def cmd_ihs_match(a):
@@ -205,7 +205,7 @@ def main(argv=None):
     s = sub.add_parser("process"); s.add_argument("--batch", type=int, default=200); s.add_argument("--max-batches", type=int); s.add_argument("--llm", action="store_true"); s.add_argument("--urls", action="store_true"); s.set_defaults(fn=cmd_process)
     s = sub.add_parser("export"); s.add_argument("--apply", action="store_true"); s.set_defaults(fn=cmd_export)
     s = sub.add_parser("status"); s.set_defaults(fn=cmd_status)
-    s = sub.add_parser("ihs-load"); s.add_argument("--dir", required=True, help="含 2011-12-09 - Initial Load 等批次子目录的 IHS 数据目录"); s.add_argument("--families", default="", help="整类导入的 IHS 大类正则，如 _IC"); s.add_argument("--workers", type=int); s.set_defaults(fn=cmd_ihs_load)
+    s = sub.add_parser("ihs-load"); s.add_argument("--dir", required=True, help="含 2011-12-09 - Initial Load 等批次子目录的 IHS 数据目录"); s.add_argument("--families", default="", help="整类导入的 IHS 大类正则，如 _IC"); s.add_argument("--workers", type=int); s.add_argument("--start", type=int, default=1, help="从第几个文件开始（日志 [i/93] 编号），中断后续跑"); s.set_defaults(fn=cmd_ihs_load)
     s = sub.add_parser("ihs-match"); s.add_argument("--batch", type=int, default=500); s.add_argument("--all", action="store_true", help="也对 IHS 无记录的物料做厂商谱系提示"); s.set_defaults(fn=cmd_ihs_match)
     s = sub.add_parser("serve"); s.add_argument("--host", default="0.0.0.0"); s.add_argument("--port", type=int, default=8080); s.set_defaults(fn=cmd_serve)
 

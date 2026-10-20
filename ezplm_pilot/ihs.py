@@ -172,9 +172,10 @@ def ensure_mpn_norm(db, chunk: int = 5000) -> int:
         n += len(rows)
 
 
-def load(ihs_dir: str | Path, families: str = "", workers: int | None = None, log=print) -> dict:
+def load(ihs_dir: str | Path, families: str = "", workers: int | None = None, start: int = 1, log=print) -> dict:
     """把 IHS 记录导入 ihs_ref：型号（规范化）在暂存库中出现的全部导入；families（IHS 大类正则，如 "_IC"）命中的整类导入。
-    批次按目录名排序依次 upsert，后到的增量覆盖先到的。可重复运行（ezPLM 陆续拉取后再跑一次即可补上新物料的匹配）。"""
+    批次按目录名排序依次 upsert，后到的增量覆盖先到的。可重复运行（ezPLM 陆续拉取后再跑一次即可补上新物料的匹配）。
+    start：从第几个文件开始（日志里的 [i/93] 编号），中断后从出错的文件续跑。"""
     import time
     from multiprocessing import Pool
     from sqlalchemy import delete, insert, select, func
@@ -192,6 +193,8 @@ def load(ihs_dir: str | Path, families: str = "", workers: int | None = None, lo
         raise FileNotFoundError(f"{ihs_dir} 下没有找到 */*.csv.gz")
     lin = Lineage()
     stats = {"files": len(files), "rows": 0, "parts_matched": 0}
+    if start > 1:
+        log(f"从第 {start} 个文件续跑：{Path(files[start - 1]).parent.name[:10]} {Path(files[start - 1]).name}")
     workers = workers or max(1, (os.cpu_count() or 2) - 1)
     def write(chunk, attempts: int = 6):
         """先删后插同一批 Objectid，一批一提交；断线（Postgres 重启 / 公网代理掉线）后重连重试。"""
@@ -213,7 +216,8 @@ def load(ihs_dir: str | Path, families: str = "", workers: int | None = None, lo
                 time.sleep(wait)
 
     with Pool(workers, initializer=_init_worker, initargs=(keys, families)) as pool:
-        for i, rows in enumerate(pool.imap(_parse_file, files)):        # imap 保持文件顺序 → 增量按日期覆盖
+        for i, rows in enumerate(pool.imap(_parse_file, files[start - 1:]), start - 1):   # imap 保持文件顺序 → 增量按日期覆盖
+            rows = list({r["objid"]: r for r in rows}.values())       # 同一文件里 Objectid 会重复出现（如 SENSOR），只留最后一条
             for r in rows:
                 res = lin.resolve(r["mfr_ihs"], r["family"])
                 r["mfr_current"], r["lineage_conf"] = res["current"], res["conf"]
