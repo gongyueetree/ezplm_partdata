@@ -50,11 +50,14 @@ def _pull_all(api, path: str, log, stop=None, **params) -> list[dict] | None:
         v = dict(variant)
         page_size = v.pop("page_size", PAGE)
         before = len(seen)
+        raw, round_ids = 0, set()
         try:
             for items, total in _pages(api, path, page_size=page_size, **params, **v):
                 for x in items:
                     if x.get("id"):
                         seen[x["id"]] = x
+                        raw += 1
+                        round_ids.add(x["id"])
                 if stop and stop():
                     return None
         except Exception as e:  # noqa —— 接口不认这种 sort 写法等：换下一种
@@ -62,6 +65,12 @@ def _pull_all(api, path: str, log, stop=None, **params) -> list[dict] | None:
             continue
         log(f"  {path}：第 {k} 轮（{variant or '默认'}），累计 {len(seen)} / {total} 条（本轮新增 {len(seen) - before}）")
         if len(seen) >= total:
+            break
+        if raw >= total and len(round_ids) < raw:
+            # 这一轮已经收到 total 行，但其中有重复的 ID：是接口本身返回了重复记录（ezPLM 厂商列表就是这样，
+            # 4242 行里只有 3215 家不同的厂商，1018 家出现两次），不是漏拉，再换查询方式也补不到
+            log(f"  {path}：接口返回的 {raw} 行里有 {raw - len(round_ids)} 行是重复的厂商/记录，去重后 {len(seen)} 条即为全部；总数 {total} 含重复，不再补拉")
+            total = len(seen)
             break
     if len(seen) < total:
         log(f"  ! {path}：试完 {len(ROUND_VARIANTS)} 种查询方式仍差 {total - len(seen)} 条，先写入已拿到的")
