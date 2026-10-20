@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import random
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
@@ -201,7 +202,10 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
 
     stats = {"job": job, "batches": 0, "parts": 0, "proposals": 0, "auto_fill": 0, "flag_mismatch": 0, "review": 0}
     while True:
+        t0 = time.perf_counter()
+        timing: dict = {}                    # 本批各步骤耗时（秒），写进日志，用来找慢在哪
         rows = db.execute(select(StagedPart).where(StagedPart.processed_at.is_(None)).order_by(StagedPart.value_score.desc(), StagedPart.id).limit(batch)).scalars().all()
+        timing["取批"] = time.perf_counter() - t0
         if not rows:
             break
         stats["batches"] += 1
@@ -209,6 +213,7 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
         by_id = {r.id: r for r in rows}
         attrs = {}
         need_detail = [r for r in rows if not (r.new_footprint or r.orig_footprint) and (r.attributes_json or "{}") in ("{}", "")]
+        t1 = time.perf_counter()
         if need_detail and fetch_details:
             try:
                 from .settings import api_source
@@ -229,6 +234,8 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
                 log(f"  拉取物料属性 {len(need_detail)} 条")
             except Exception as e:  # noqa
                 log(f"  ! 拉取物料属性失败：{str(e)[:120]}")
+        if need_detail and fetch_details:
+            timing["拉属性"] = time.perf_counter() - t1
         for r in rows:
             try:
                 a = json.loads(r.attributes_json or "{}")
@@ -242,10 +249,13 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
                          ("封装", lambda: list(pkg.propose(parts, attrs))),
                          ("符号", lambda: list(propose_symbols(parts, idx)) if idx else []), ("链接", lambda: list(urlf.propose(parts)) if urlf else []),
                          ("IHS", lambda: _ihs_props(ihs, parts, by_id, props))):
+            t1 = time.perf_counter()
             try:
                 props += fn()
             except Exception as e:  # noqa  —— 单个模块出错不影响本批其它模块
                 log(f"  ! {name}模块出错，本批跳过该模块：{str(e)[:200]}")
+            timing[name] = time.perf_counter() - t1
+        t1 = time.perf_counter()
         # 重跑时作废上一轮同物料、同字段的待复核建议，避免重复
         old = db.execute(select(StagedProposal).where(StagedProposal.part_id.in_(list(by_id)), StagedProposal.review_status == "pending")).scalars().all()
         for o in old:
@@ -257,8 +267,11 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
         db.add(JobLog(job=job, stage="process", batch_no=stats["batches"], n_items=len(rows), finished_at=datetime.utcnow(),
                       detail=json.dumps({k: v for k, v in stats.items() if k != "job"})))
         db.commit()
+        timing["写库"] = time.perf_counter() - t1
+        took = " ".join(f"{k}{v:.1f}" for k, v in timing.items() if v >= 0.05)
         log(f"批次 {stats['batches']}: {len(rows)} 条 → 建议 {stats['proposals']}（自动 {stats['auto_fill']} / 疑似错误 {stats['flag_mismatch']} / 复核 {stats['review']}）本批按字段 {by_field}"
-            + (f"；LLM 累计 {clf.llm.n_calls} 次/失败 {clf.llm.n_errors}" if clf.llm else ""))
+            + (f"；LLM 累计 {clf.llm.n_calls} 次/失败 {clf.llm.n_errors}" if clf.llm else "")
+            + f"\n    耗时 {time.perf_counter() - t0:.1f}s：{took}")
         if progress:
             progress({"done": stats["parts"], "total": todo_total})
         if (max_batches and stats["batches"] >= max_batches) or (stop and stop()):
@@ -352,6 +365,19 @@ def ihs_match(batch: int = 500, job: str | None = None, only_matched: bool = Tru
             break
     db.close()
     return stats
+
+
+def void_stale_pending() -> int:
+    """作废"未处理"物料上的待复核建议：它们是旧规则留下的（物料被重置或从未按当前规则处理），重新处理时会重新生成。"""
+    from sqlalchemy import update
+    db = get_session()
+    stale = select(StagedPart.id).where(StagedPart.processed_at.is_(None))
+    n = db.execute(update(StagedProposal).where(StagedProposal.review_status == "pending", StagedProposal.part_id.in_(stale))
+                   .values(review_status="rejected", review_note="stale: part unprocessed", reviewed_at=datetime.utcnow()),
+                   execution_options={"synchronize_session": False}).rowcount
+    db.commit()
+    db.close()
+    return n or 0
 
 
 def dedupe_pending(log=None) -> int:
@@ -493,7 +519,10 @@ def summary() -> dict:
         },
         "ihs_matched": q(select(func.count(StagedPart.id)).where(StagedPart.ihs_objid.isnot(None))),
         "proposals": {k: v for k, v in db.execute(select(StagedProposal.review_status, func.count()).group_by(StagedProposal.review_status)).all()},
-        "by_field_action": [(f, a, n) for f, a, n in db.execute(select(StagedProposal.field, StagedProposal.action, func.count()).group_by(StagedProposal.field, StagedProposal.action)).all()],
+        # 只统计当前有效的建议（待复核 + 自动写入），已作废/驳回/通过的不算
+        "by_field_action": [(f, a, n) for f, a, n in db.execute(select(StagedProposal.field, StagedProposal.action, func.count())
+                            .where(StagedProposal.review_status.in_(("pending", "auto")))
+                            .group_by(StagedProposal.field, StagedProposal.action)).all()],
         "jobs": [dict(job=j.job, stage=j.stage, batch_no=j.batch_no, n=j.n_items, at=j.finished_at) for j in db.execute(select(JobLog).order_by(JobLog.id.desc()).limit(15)).scalars()],
         "ingest_page": _state(db, "ingest:page", "1"),
     }

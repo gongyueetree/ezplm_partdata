@@ -158,7 +158,7 @@ def cmd_ingest(a):
 
 def cmd_process(a):
     from . import pipeline
-    print(pipeline.process(batch=a.batch, max_batches=a.max_batches, use_llm=a.llm, do_urls=a.urls))
+    print(pipeline.process(batch=a.batch, max_batches=a.max_batches, use_llm=a.llm, do_urls=a.urls, fetch_details=not a.no_details, log=print))
 
 
 def cmd_export(a):
@@ -221,7 +221,7 @@ def main(argv=None):
     s = sub.add_parser("writeback"); s.add_argument("--file", required=True); s.add_argument("--apply", action="store_true"); s.add_argument("--actions", default="auto_fill"); s.set_defaults(fn=cmd_writeback)
 
     s = sub.add_parser("ingest"); common(s); s.add_argument("--batch", type=int, default=500); s.add_argument("--max-batches", type=int); s.add_argument("--reset", action="store_true"); s.set_defaults(fn=cmd_ingest)
-    s = sub.add_parser("process"); s.add_argument("--batch", type=int, default=200); s.add_argument("--max-batches", type=int); s.add_argument("--llm", action="store_true"); s.add_argument("--urls", action="store_true"); s.set_defaults(fn=cmd_process)
+    s = sub.add_parser("process"); s.add_argument("--batch", type=int, default=200); s.add_argument("--max-batches", type=int); s.add_argument("--llm", action="store_true"); s.add_argument("--urls", action="store_true"); s.add_argument("--no-details", action="store_true", help="不拉取 ezPLM 物料属性（更快）"); s.set_defaults(fn=cmd_process)
     s = sub.add_parser("export"); s.add_argument("--apply", action="store_true"); s.set_defaults(fn=cmd_export)
     s = sub.add_parser("status"); s.set_defaults(fn=cmd_status)
     s = sub.add_parser("ihs-load"); s.add_argument("--dir", required=True, help="含 2011-12-09 - Initial Load 等批次子目录的 IHS 数据目录"); s.add_argument("--families", default="", help="整类导入的 IHS 大类正则，如 _IC"); s.add_argument("--workers", type=int); s.add_argument("--start", type=int, default=1, help="从第几个文件开始（日志 [i/93] 编号），中断后续跑"); s.set_defaults(fn=cmd_ihs_load)

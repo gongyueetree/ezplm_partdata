@@ -140,7 +140,7 @@ HOME = """{% extends "base" %}{% block body %}
 <pre style="max-height:180px">{{ job.log[-8:]|join('\\n') }}</pre><a class=btn href="/jobs">去任务控制 →</a>
 {% else %}<p class=mute>没有运行中的任务。</p><a class=btn href="/jobs">启动任务 →</a>{% endif %}</div>
 </div>
-<div class=panel><h2>建议分布</h2>
+<div class=panel><h2>建议分布 <span class=mute style="font-weight:400">当前有效（待复核 + 自动写入）</span></h2>
 <table><tr><th>字段</th><th>动作</th><th>条数</th></tr>{% for f,a,n in s.by_field_action %}<tr><td>{{ f }}</td><td class="act-{{ a }}">{{ a }}</td><td>{{ n }}</td></tr>{% endfor %}</table></div>
 <div class=panel><h2>最近批次</h2>
 <table><tr><th>任务</th><th>阶段</th><th>批次</th><th>条数</th><th>时间</th></tr>{% for j in s.jobs %}<tr><td>{{ j.job }}</td><td>{{ j.stage }}</td><td>{{ j.batch_no }}</td><td>{{ j.n }}</td><td class=mute>{{ j.at }}</td></tr>{% endfor %}</table></div>
@@ -162,8 +162,9 @@ JOBS = """{% extends "base" %}{% block body %}
 <div class=row><div><label>每批条数</label><input name=batch value="{{ cfg.process_batch }}"></div><div><label>最多批次（空=全部）</label><input name=max_batches placeholder="如 10"></div></div>
 <label><input type=checkbox name=llm value=1> 启用 LLM 仲裁（需在设置里填 API Key）</label>
 <label><input type=checkbox name=urls value=1> 补全官网/数据手册链接（联网验证，较慢）</label>
+<label><input type=checkbox name=details value=1 checked> 拉取物料属性（缺封装的物料逐条调 ezPLM 详情接口，用于封装映射；较慢，首轮全量可先不勾）</label>
 <p><button class=pri {{ 'disabled' if busy }}>开始处理</button> <span class=mute>待处理 {{ s.parts_total - s.parts_processed }} 条</span></p></form>
-<form method=post action="/jobs/reset-processed" onsubmit="return confirm('把所有物料标记为未处理？已有建议和新值保留。')"><button>重置处理状态（规则更新后重跑）</button></form></div>
+<form method=post action="/jobs/reset-processed" onsubmit="return confirm('把所有物料标记为未处理？这些物料的待复核建议会作废（重新处理时重新生成）；已写入的新值保留。')"><button>重置处理状态（规则更新后重跑）</button></form></div>
 
 <div class=panel><h2>③ 扫描符号/封装来源（scan）</h2>
 <form class=frm method=post action="/jobs/start"><input type=hidden name=kind value=scan>
@@ -274,6 +275,7 @@ REVIEW = """{% extends "base" %}{% block body %}
 {# 操作按钮各自一个表单，放在筛选表单外面：表单不能嵌套，嵌套时浏览器会忽略内层表单，点按钮只会提交筛选 #}
 {% if status=='pending' %}<div class=filters>
 <form class=inline method=post action="/review/dedupe" onsubmit="return confirm('作废重复的待复核建议（同一物料、同一字段、同一建议值只留最新一条）？')"><button>清理重复建议</button></form>
+<form class=inline method=post action="/review/void-stale" onsubmit="return confirm('作废“未处理”物料上的待复核建议？这些是旧规则生成的，物料重新处理时会按新规则重新生成。')"><button>作废未处理物料上的旧建议</button></form>
 {% if rows %}<form class=inline method=post action="/review/bulk?next={{ next|urlencode }}" onsubmit="return confirm('通过本页全部 {{ rows|length }} 条？')"><input type=hidden name=ids value="{{ rows|map(attribute='0.id')|join(',') }}"><button class=ok>本页全部通过</button></form>{% endif %}
 </div>{% endif %}
 <table><tr><th>型号</th><th>制造商</th><th>描述</th><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>操作</th></tr>
@@ -460,9 +462,9 @@ def _run_ingest(job, source, batch, max_batches, reset, incremental=False):
                            stop=job.should_stop, log=job.say, progress=lambda p: job.progress.update(p))
 
 
-def _run_process(job, batch, max_batches, llm, urls):
+def _run_process(job, batch, max_batches, llm, urls, details=True):
     cfg = settings.apply_env()
-    return pipeline.process(batch=batch, max_batches=max_batches, use_llm=llm, do_urls=urls, job=job.id,
+    return pipeline.process(batch=batch, max_batches=max_batches, use_llm=llm, do_urls=urls, job=job.id, fetch_details=details,
                             stop=job.should_stop, log=job.say, progress=lambda p: job.progress.update(p),
                             auto_fill_min=float(cfg["auto_fill_min"]), flag_min=float(cfg["flag_min"]))
 
@@ -511,8 +513,8 @@ async def jobs_start(request: Request, user: str = Depends(auth)):
             manager.start("ingest", lambda j: _run_ingest(j, f.get("source", "api"), int(f.get("batch") or 500), mb, bool(f.get("reset")), bool(f.get("incremental"))),
                           {"source": f.get("source"), "batch": f.get("batch"), "max_batches": mb, "reset": bool(f.get("reset")), "incremental": bool(f.get("incremental"))})
         elif kind == "process":
-            manager.start("process", lambda j: _run_process(j, int(f.get("batch") or 200), mb, bool(f.get("llm")), bool(f.get("urls"))),
-                          {"batch": f.get("batch"), "max_batches": mb, "llm": bool(f.get("llm")), "urls": bool(f.get("urls"))})
+            manager.start("process", lambda j: _run_process(j, int(f.get("batch") or 200), mb, bool(f.get("llm")), bool(f.get("urls")), bool(f.get("details"))),
+                          {"batch": f.get("batch"), "max_batches": mb, "llm": bool(f.get("llm")), "urls": bool(f.get("urls")), "details": bool(f.get("details"))})
         elif kind == "scan":
             if not f.get("path"):
                 return back("/jobs", "请填写仓库地址或目录", True)
@@ -545,7 +547,8 @@ def jobs_reset(user: str = Depends(auth)):
     db = get_session()
     n = db.query(StagedPart).filter(StagedPart.processed_at.isnot(None)).update({StagedPart.processed_at: None})
     db.commit()
-    return back("/jobs", f"已重置 {n} 条为未处理")
+    v = pipeline.void_stale_pending()
+    return back("/jobs", f"已重置 {n} 条为未处理，作废其待复核建议 {v} 条")
 
 
 @app.get("/api/jobs/current")
@@ -665,6 +668,11 @@ async def review_bulk(request: Request, next: str = "", user: str = Depends(auth
             except KeyError:
                 pass
     return back(next or "/review", f"已通过 {n} 条")
+
+
+@app.post("/review/void-stale")
+def review_void_stale(user: str = Depends(auth)):
+    return back("/review", f"已作废未处理物料上的旧建议 {pipeline.void_stale_pending()} 条")
 
 
 @app.post("/review/dedupe")
