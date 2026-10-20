@@ -125,18 +125,37 @@ class KnnVoter:
         if len(parts) < 2:
             return self
         X = self.vec.fit_transform([p.text for p in parts])
+        self._xt = X.T.tocsr()                              # vote_many 用：近邻库矩阵的转置，只算一次
         self.nn = NearestNeighbors(n_neighbors=min(self.k + 1, len(parts)), metric="cosine").fit(X)
         self.labels = [p.category_id for p in parts]
         self.ids = [p.id for p in parts]
         return self
 
     def vote(self, p: Part) -> Candidate | None:
+        return self.vote_many([p])[0]
+
+    def vote_many(self, parts: list[Part], chunk: int = 100) -> list[Candidate | None]:
+        """一批物料一起算近邻：一次稀疏矩阵乘法代替逐条 kneighbors。
+        逐条调用时每次都要在 9 万条近邻库上做一遍暴力搜索（线上每颗约 0.3 秒，一批 200 颗约 1 分钟）。
+        TF-IDF 向量已做 L2 归一化，点积即余弦相似度，与 NearestNeighbors(metric="cosine") 结果相同。"""
         if self.nn is None:
-            return None
-        dist, idx = self.nn.kneighbors(self.vec.transform([p.text]))
+            return [None] * len(parts)
+        import numpy as np
+        kk = self.nn.n_neighbors
+        out: list[Candidate | None] = []
+        for s in range(0, len(parts), chunk):
+            sub = parts[s:s + chunk]
+            sims = (self.vec.transform([p.text for p in sub]) @ self._xt).toarray()
+            for row, p in zip(sims, sub):
+                top = np.argpartition(-row, kk - 1)[:kk] if len(row) > kk else np.arange(len(row))
+                top = top[np.lexsort((top, -row[top]))]       # 相似度降序，同分按库内顺序，和 kneighbors 一致
+                out.append(self._tally(p, 1.0 - row[top], top))
+        return out
+
+    def _tally(self, p: Part, dist, idx) -> Candidate | None:
         votes, weights = Counter(), Counter()
         n = 0
-        for d, i in zip(dist[0], idx[0]):
+        for d, i in zip(dist, idx):
             if self.ids[i] == p.id:       # 排除自身
                 continue
             w = max(0.0, 1.0 - d)
@@ -314,9 +333,14 @@ class Classifier:
         return Candidate(best, round(conf, 3), "+".join(sorted({c.method.split(":")[0] for c in agreeing})),
                          {"layers": [{"m": c.method, "cat": self.tax.path(c.category_id), "conf": c.conf} for c in cands]})
 
-    def classify(self, p: Part) -> Proposal:
+    def classify_many(self, parts: list[Part]) -> list[Proposal]:
+        """批量分类：近邻一次算完整批，其余逻辑与 classify 相同。"""
+        knn = self.knn.vote_many(parts)
+        return [self.classify(p, _knn=kv, _knn_done=True) for p, kv in zip(parts, knn)]
+
+    def classify(self, p: Part, _knn=None, _knn_done: bool = False) -> Proposal:
         cands = self.rules.apply(p)
-        kv = self.knn.vote(p)
+        kv = _knn if _knn_done else self.knn.vote(p)
         if kv:
             cands.append(kv)
         merged = self._merge(cands)
