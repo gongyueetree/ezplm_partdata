@@ -22,18 +22,39 @@ PAGE = 100                                   # ezPLM 后台每页上限
 
 
 def _pages(api, path: str, log, **params):
+    """按页拉一轮；每页返回 (items, total)。"""
     page = 1
     while True:
         js = api._get(path, current=page, pageSize=PAGE, **params)
         data = js.get("data", js)
         items = data.get("data") or data.get("items") or []
         total = data.get("total") or 0
-        yield items
-        if page == 1:
-            log(f"  {path}：共 {total} 条")
+        yield items, total
         if not items or page * PAGE >= total:
             break
         page += 1
+
+
+def _pull_all(api, path: str, log, stop=None, max_rounds: int = 10, **params) -> list[dict] | None:
+    """拉全表。ezPLM 列表接口的排序在大量相同排序值时不稳定，翻页会重复/漏掉记录（厂商表一轮只拿到 4242 条里的 3215 条），
+    所以一轮拉完不够总数就再拉一轮补漏，最多 max_rounds 轮（厂商表一轮约 43 页，代价很小）。收到停止信号返回 None。"""
+    seen: dict[str, dict] = {}
+    total = idle = 0
+    for rnd in range(1, max_rounds + 1):
+        before = len(seen)
+        for items, total in _pages(api, path, log, **params):
+            for x in items:
+                if x.get("id"):
+                    seen[x["id"]] = x
+            if stop and stop():
+                return None
+        log(f"  {path}：第 {rnd} 轮，累计 {len(seen)} / {total} 条（本轮新增 {len(seen) - before}）")
+        idle = idle + 1 if len(seen) == before else 0
+        if len(seen) >= total or idle >= 2:              # 连续两轮一条没补到就不再拉
+            break
+    if len(seen) < total:
+        log(f"  ! {path}：拉了 {rnd} 轮仍差 {total - len(seen)} 条（接口翻页不稳定），先写入已拿到的")
+    return list(seen.values())
 
 
 def _tf(v) -> bool:
@@ -60,13 +81,11 @@ def pull(api, db, what=("companies", "symbols", "footprints"), log=None, stop=No
     }
     for key in what:
         model, path, params, conv = specs[key]
-        rows = []
-        for items in _pages(api, path, log, **params):
-            rows += [conv(x) for x in items if x.get("id")]
-            if stop and stop():
-                log("  收到停止信号，本表不写入")
-                return out
-        rows = list({r["id"]: r for r in rows}.values())
+        raw = _pull_all(api, path, log, stop=stop, **params)
+        if raw is None:
+            log("  收到停止信号，本表不写入")
+            return out
+        rows = [conv(x) for x in raw]
         now = datetime.utcnow()
         db.execute(delete(model))
         for i in range(0, len(rows), 2000):
