@@ -83,6 +83,7 @@ lineage:
   - {from: "EXAR CORP", match: "^exar\\b", to: "MaxLinear", conf: A, note: "2017 MaxLinear收购"}
   - {from: "PERICOM SEMICONDUCTOR CORP", match: "^pericom|百利通", to: "Diodes Inc", conf: A, note: "2015 Diodes收购"}
   - {from: "EPCOS AG", match: "^epcos|爱普科斯", to: "TDK", conf: A, note: "2008 TDK收购"}
+  - {from: "RICOH COMPANY LTD", match: "^ricoh|理光", to: "Ricoh", conf: B, rules: [{families: "_IC", to: "Nisshinbo Micro Devices"}], note: "2022 理光电子器件与新日本无线合并为日清纺微电子；IC→Nisshinbo"}
   # —— IHS 数据中出现的全部被并购/更名厂商（由映射表生成）——
   - {from: "QIMONDA AG", to: "Qimonda (已破产)", conf: C, note: "2009 破产，无继承者；保留原名，标记停产"}
   - {from: "THOMAS & BETTS CORP", to: "ABB", conf: A, note: "2012 ABB收购"}

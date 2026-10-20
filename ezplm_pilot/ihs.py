@@ -231,6 +231,141 @@ def load(ihs_dir: str | Path, families: str = "", workers: int | None = None, st
     return stats
 
 
+# --------------------------------------------------------------------------- 新增候选（IHS 有、ezPLM 没有）
+CAND_STATUSES = ("ACTIVE", "ACTIVE-UNCONFIRMED")
+CAND_EXCLUDE_CATEGORIES = ("Power Supply Module",)                 # Power-One / Vicor 等电源模块，不是芯片
+CAND_EXCLUDE_MFRS = ("DEFENSE SUPPLY CENTER COLUMBUS",)            # 军标图号（SMD），不是厂商料号
+CAND_COLUMNS = ["mpn", "mpn_norm", "manufacturer_current", "manufacturer_ihs", "lineage_conf", "match_type", "ezplm_same_mpn_mfrs",
+                "ihs_family", "ihs_category", "description", "package", "status_2012", "generic", "ihs_objid", "batch"]
+SAMPLE_COLUMNS = ["sample_no"] + CAND_COLUMNS + ["check_digikey", "check_mouser", "current_status", "checked_source", "note"]
+
+
+def _parse_ic_active(path: str) -> list[tuple]:
+    """解析一个 IC 大类文件，只留 2012 年仍在产、非电源模块、非军标图号的记录（紧凑元组，省内存）。"""
+    csv.field_size_limit(10 ** 9)
+    batch = Path(path).parent.name[:10]
+    family = re.sub(r"\d+$", "", Path(path).name.replace(".csv.gz", ""))
+    out = []
+    with gzip.open(path, "rt", encoding="latin-1", newline="") as f:
+        r = csv.reader(f)
+        head = next(r)
+        ix = {k: i for i, k in enumerate(head)}
+        get = lambda row, k: (row[ix[k]].strip() if k in ix and ix[k] < len(row) else "")
+        for row in r:
+            mpn, mfr, st, cat = get(row, "Manufacturer Part Number"), get(row, "Manufacturer Name"), get(row, "Status"), get(row, "Part Category")
+            # 增量批次里的停产记录也要带上，用来覆盖初始批次的在产状态；最后再按状态过滤
+            if not norm_mpn(mpn) or cat in CAND_EXCLUDE_CATEGORIES or mfr in CAND_EXCLUDE_MFRS:
+                continue
+            if batch == "2011-12-09" and st not in CAND_STATUSES:
+                continue
+            out.append((get(row, "Objectid"), mpn, mfr, st, family, cat, get(row, "Part Description"),
+                        get(row, "Mfr Package Description"), get(row, "Generic Number"), batch))
+    return out
+
+
+def candidates(ihs_dir: str | Path, out_dir: str | Path, sample: int = 500, seed: int = 42, workers: int | None = None,
+               allow_empty: bool = False, log=print) -> dict:
+    """IHS 里 2012 年仍在产、不是电源模块、ezPLM（暂存库）里还没有的 IC 型号 → CSV；再随机抽 sample 条供人工核对当前状态。
+
+    同一型号 + 同一当前厂商（经谱系）只留一条；ezPLM 里已有同型号同厂商的排除。
+    match_type：new = ezPLM 没有这个型号；other_mfr = ezPLM 有同型号但厂商不同（同号异厂，多半是另一颗料）。
+    ezPLM 里同型号但厂商为空的，无法判断是否同一颗，保守排除。"""
+    import random
+    from multiprocessing import Pool
+    from sqlalchemy import select
+    from .staging import StagedPart, get_session
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    lin = Lineage()
+    cur_key = lambda name, fam="": mfr_key(lin.resolve(name, fam)["current"])
+
+    db = get_session()
+    ezplm: dict[str, set] = {}                 # mpn_norm -> {当前厂商键}；"" 表示厂商为空
+    names: dict[tuple, str] = {}
+    n_parts = 0
+    for mpn, mf in db.execute(select(StagedPart.mpn, StagedPart.manufacturer)):
+        k = norm_mpn(mpn)
+        if not k:
+            continue
+        n_parts += 1
+        ck = cur_key(mf) if mf else ""
+        ezplm.setdefault(k, set()).add(ck)
+        names.setdefault((k, ck), mf or "")
+    db.close()
+    log(f"暂存库物料 {n_parts} 条，规范化型号 {len(ezplm)} 个")
+    if n_parts < 1000 and not allow_empty:
+        raise RuntimeError(f"暂存库只有 {n_parts} 条物料，像是没连上线上库（检查 DATABASE_URL）；确认无误请加 --allow-empty")
+
+    files = sorted(str(p) for p in Path(ihs_dir).glob("*/*.csv.gz") if "_IC" in p.name)
+    if not files:
+        raise FileNotFoundError(f"{ihs_dir} 下没有找到 IC 大类的 */*.csv.gz")
+    latest: dict[str, tuple] = {}              # objid -> 记录；文件按批次日期排序，后到的覆盖先到的
+    workers = workers or max(1, (os.cpu_count() or 2) - 1)
+    with Pool(min(workers, len(files))) as pool:
+        for path, rows in zip(files, pool.imap(_parse_ic_active, files)):
+            for t in rows:
+                latest[t[0]] = t
+            log(f"  {Path(path).parent.name[:10]} {Path(path).name}: {len(rows)} 条")
+
+    stats = {"ihs_active_records": 0, "distinct_mpn_mfr": 0, "exists_in_ezplm": 0, "ezplm_mfr_empty": 0, "new": 0, "other_mfr": 0}
+    best: dict[tuple, tuple] = {}
+    for t in latest.values():
+        if t[3] not in CAND_STATUSES:          # 增量批次改成了停产
+            continue
+        stats["ihs_active_records"] += 1
+        key = (norm_mpn(t[1]), cur_key(t[2], t[4]))
+        old = best.get(key)
+        if old is None or (t[9], t[0]) > (old[9], old[0]):
+            best[key] = t
+    stats["distinct_mpn_mfr"] = len(best)
+
+    rows = []
+    for (k, ck), t in best.items():
+        have = ezplm.get(k)
+        if have and ck in have:
+            stats["exists_in_ezplm"] += 1
+            continue
+        if have and "" in have:
+            stats["ezplm_mfr_empty"] += 1
+            continue
+        match = "other_mfr" if have else "new"
+        stats[match] += 1
+        res = lin.resolve(t[2], t[4])
+        rows.append({"mpn": t[1], "mpn_norm": k, "manufacturer_current": res["current"], "manufacturer_ihs": t[2], "lineage_conf": res["conf"],
+                     "match_type": match, "ezplm_same_mpn_mfrs": "; ".join(sorted(names.get((k, c), c) for c in have)) if have else "",
+                     "ihs_family": t[4], "ihs_category": t[5], "description": t[6], "package": t[7], "status_2012": t[3],
+                     "generic": t[8], "ihs_objid": t[0], "batch": t[9]})
+    rows.sort(key=lambda r: (r["manufacturer_current"], r["mpn"]))
+
+    path = out_dir / "ihs_candidates.csv"
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:      # utf-8-sig：Excel 直接打开不乱码
+        w = csv.DictWriter(f, fieldnames=CAND_COLUMNS)
+        w.writeheader()
+        w.writerows(rows)
+
+    from urllib.parse import quote
+    picked = random.Random(seed).sample(rows, min(sample, len(rows)))
+    spath = out_dir / f"ihs_candidates_sample{len(picked)}.csv"
+    with open(spath, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=SAMPLE_COLUMNS)
+        w.writeheader()
+        for i, r in enumerate(picked, 1):
+            w.writerow(dict(r, sample_no=i, check_digikey=f"https://www.digikey.com/en/products/result?keywords={quote(r['mpn'])}",
+                            check_mouser=f"https://www.mouser.com/c/?q={quote(r['mpn'])}", current_status="", checked_source="", note=""))
+
+    from collections import Counter
+    spath2 = out_dir / "ihs_candidates_summary.csv"
+    with open(spath2, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["维度", "取值", "候选数"])
+        for dim, col in (("IHS 大类", "ihs_family"), ("IHS 分类", "ihs_category"), ("当前厂商", "manufacturer_current"), ("匹配类型", "match_type")):
+            for v, n in Counter(r[col] for r in rows).most_common(50 if dim != "IHS 大类" else None):
+                w.writerow([dim, v, n])
+    stats.update(candidates=len(rows), csv=str(path), sample_csv=str(spath), summary_csv=str(spath2))
+    return stats
+
+
 # --------------------------------------------------------------------------- 匹配与建议
 class IhsMatcher:
     def __init__(self, db, tax=None, pkg=None, auto_min: float = 0.85, lineage: Lineage | None = None):
