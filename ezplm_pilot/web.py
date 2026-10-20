@@ -368,15 +368,16 @@ REVIEWGROUPS = """{% extends "base" %}{% block topright %}<a class=btn href="/re
 <form class=filters method=get>
 <select name=field>{% for v in ['category_id','footprint','symbol','manufacturer','description_en','url','datasheet'] %}<option {{ 'selected' if field==v }}>{{ v }}</option>{% endfor %}</select>
 <select name=action><option value="">— 动作 —</option>{% for v in ['flag_mismatch','review'] %}<option {{ 'selected' if action==v }}>{{ v }}</option>{% endfor %}</select>
-<input name=minconf value="{{ minconf }}" placeholder="最低置信度" style="width:110px"><button class=pri>筛选</button>
+<input name=minconf value="{{ minconf }}" placeholder="最低置信度" style="width:110px">
+<select name=by><option value=value {{ 'selected' if by!='rule' }}>按 现值→建议值 分组</option><option value=rule {{ 'selected' if by=='rule' }}>按 规则→建议值 分组</option></select><button class=pri>筛选</button>
 <span class=mute>共 {{ n_groups }} 组，显示条数最多的 {{ groups|length }} 组</span></form>
 <p class=mute>每组是"现值 → 建议值"相同的一批待复核建议。先点"看样例"抽查几条，确认整组都对再整组通过；整组都错就整组驳回，并把规律告诉开发者改规则。整组操作在后台任务里执行。</p>
-<table><tr><th>条数</th><th>现值</th><th>建议值</th><th>动作</th><th>置信度（平均 / 范围）</th><th>操作</th></tr>
-{% for g in groups %}<tr><td><b>{{ g.n }}</b></td><td class=mute style="max-width:320px">{{ label(g.current) or '空' }}</td><td style="max-width:320px"><b>{{ label(g.proposed) }}</b></td>
+<table><tr><th>条数</th>{% if by=='rule' %}<th>规则</th>{% endif %}<th>现值</th><th>建议值</th><th>动作</th><th>置信度（平均 / 范围）</th><th>操作</th></tr>
+{% for g in groups %}<tr><td><b>{{ g.n }}</b></td>{% if by=='rule' %}<td style="max-width:260px;word-break:break-all"><code>{{ '（无规则：近邻/大模型）' if g.rule == no_rule else g.rule }}</code></td>{% endif %}<td class=mute style="max-width:320px">{{ label(g.current) or '空' }}</td><td style="max-width:320px"><b>{{ label(g.proposed) }}</b></td>
 <td class="act-{{ g.action }}">{{ g.action }}</td><td>{{ '%.2f'|format(g.avg) }} <span class=mute>（{{ '%.2f'|format(g['min']) }}–{{ '%.2f'|format(g['max']) }}）</span></td>
-<td style="white-space:nowrap"><a class=btn href="/review?field={{ field }}&status=pending&action={{ g.action }}&minconf={{ minconf }}&current={{ g.current|urlencode }}&proposed={{ g.proposed|urlencode }}" target=_blank>看样例</a>
-<form class=inline method=post action="/review/groups/apply" onsubmit="return confirm('整组通过 {{ g.n }} 条？会把建议值写为新值。')"><input type=hidden name=field value="{{ field }}"><input type=hidden name=current value="{{ g.current }}"><input type=hidden name=proposed value="{{ g.proposed }}"><input type=hidden name=action value="{{ g.action }}"><input type=hidden name=minconf value="{{ minconf }}"><input type=hidden name=decision value=approve><button class=ok {{ 'disabled' if busy }}>整组通过</button></form>
-<form class=inline method=post action="/review/groups/apply" onsubmit="return confirm('整组驳回 {{ g.n }} 条？')"><input type=hidden name=field value="{{ field }}"><input type=hidden name=current value="{{ g.current }}"><input type=hidden name=proposed value="{{ g.proposed }}"><input type=hidden name=action value="{{ g.action }}"><input type=hidden name=minconf value="{{ minconf }}"><input type=hidden name=decision value=reject><button class=bad {{ 'disabled' if busy }}>整组驳回</button></form></td></tr>{% endfor %}</table>
+<td style="white-space:nowrap"><a class=btn href="/review?field={{ field }}&status=pending&action={{ g.action }}&minconf={{ minconf }}&current={{ g.current|urlencode }}&proposed={{ g.proposed|urlencode }}{% if by=='rule' %}&rule={{ g.rule|urlencode }}{% endif %}" target=_blank>看样例</a>
+<form class=inline method=post action="/review/groups/apply" onsubmit="return confirm('整组通过 {{ g.n }} 条？会把建议值写为新值。')"><input type=hidden name=field value="{{ field }}"><input type=hidden name=current value="{{ g.current }}"><input type=hidden name=proposed value="{{ g.proposed }}"><input type=hidden name=action value="{{ g.action }}"><input type=hidden name=minconf value="{{ minconf }}">{% if by=='rule' %}<input type=hidden name=rule value="{{ g.rule }}">{% endif %}<input type=hidden name=decision value=approve><button class=ok {{ 'disabled' if busy }}>整组通过</button></form>
+<form class=inline method=post action="/review/groups/apply" onsubmit="return confirm('整组驳回 {{ g.n }} 条？')"><input type=hidden name=field value="{{ field }}"><input type=hidden name=current value="{{ g.current }}"><input type=hidden name=proposed value="{{ g.proposed }}"><input type=hidden name=action value="{{ g.action }}"><input type=hidden name=minconf value="{{ minconf }}">{% if by=='rule' %}<input type=hidden name=rule value="{{ g.rule }}">{% endif %}<input type=hidden name=decision value=reject><button class=bad {{ 'disabled' if busy }}>整组驳回</button></form></td></tr>{% endfor %}</table>
 {% endblock %}"""
 
 LIBRARY = """{% extends "base" %}{% block topright %}<a class=btn href="/library/upload">导入符号 / 封装 / 工程</a>{% endblock %}{% block body %}
@@ -792,7 +793,7 @@ async def part_edit(request: Request, pid: str, user: str = Depends(auth)):
 # ---- 复核
 @app.get("/review", response_class=HTMLResponse)
 def review_queue(request: Request, field: str = "", action: str = "", status: str = "pending", minconf: str = "", page: int = 1, size: int = 50,
-                 current: str | None = None, proposed: str | None = None, user: str = Depends(auth)):
+                 current: str | None = None, proposed: str | None = None, rule: str | None = None, user: str = Depends(auth)):
     db = get_session()
     stmt = select(StagedProposal, StagedPart).join(StagedPart, StagedPart.id == StagedProposal.part_id).where(StagedProposal.review_status == status, StagedProposal.field != "manual")
     if field:
@@ -805,13 +806,14 @@ def review_queue(request: Request, field: str = "", action: str = "", status: st
         stmt = stmt.where(or_(StagedProposal.current == "", StagedProposal.current.is_(None)) if current == "" else StagedProposal.current == current)
     if proposed is not None:
         stmt = stmt.where(StagedProposal.proposed == proposed)
+    stmt = pipeline.rule_filter(stmt, rule)
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar()
     rows = db.execute(stmt.order_by(StagedProposal.confidence.desc(), StagedPart.value_score.desc()).offset((page - 1) * size).limit(size)).all()
     tax = pipeline.load_taxonomy(db)
     for r, p in rows:
         r.current_label = tax.path(r.current) if (r.field == "category_id" and r.current in tax.nodes) else ""
     from urllib.parse import quote
-    qs = f"field={field}&action={action}&status={status}&minconf={minconf}" + (f"&current={quote(current)}" if current is not None else "") + (f"&proposed={quote(proposed)}" if proposed is not None else "")
+    qs = f"field={field}&action={action}&status={status}&minconf={minconf}" + (f"&current={quote(current)}" if current is not None else "") + (f"&proposed={quote(proposed)}" if proposed is not None else "") + (f"&rule={quote(rule)}" if rule is not None else "")
     return render("review", request, title="复核队列", nav="review", user=user, rows=rows, total=total, page=page, size=size, field=field, action=action, status=status, minconf=minconf, qs=qs, next=f"/review?{qs}&page={page}")
 
 
@@ -829,12 +831,14 @@ async def review_bulk(request: Request, next: str = "", user: str = Depends(auth
 
 
 @app.get("/review/groups", response_class=HTMLResponse)
-def review_groups_page(request: Request, field: str = "category_id", action: str = "", minconf: str = "", user: str = Depends(auth)):
+def review_groups_page(request: Request, field: str = "category_id", action: str = "", minconf: str = "", by: str = "value", user: str = Depends(auth)):
     db = get_session()
-    groups, n_groups = pipeline.review_groups(db, field, action, float(minconf) if minconf else None)
+    fn = pipeline.review_groups_by_rule if by == "rule" else pipeline.review_groups
+    groups, n_groups = fn(db, field, action, float(minconf) if minconf else None)
     tax = pipeline.load_taxonomy(db)
     label = (lambda v: tax.path(v) if v in tax.nodes else (v or "")) if field == "category_id" else (lambda v: v or "")
-    return render("reviewgroups", request, title="分组复核", nav="review", user=user, groups=groups, n_groups=n_groups, field=field, action=action, minconf=minconf, label=label)
+    return render("reviewgroups", request, title="分组复核", nav="review", user=user, groups=groups, n_groups=n_groups, field=field, action=action, minconf=minconf,
+                  label=label, by=by, no_rule=pipeline.NO_RULE)
 
 
 @app.post("/review/groups/apply")
@@ -842,14 +846,15 @@ async def review_groups_apply(request: Request, user: str = Depends(auth)):
     f = await request.form()
     field, decision = f.get("field") or "category_id", f.get("decision")
     cur, prop, action = f.get("current") or "", f.get("proposed") or "", f.get("action") or ""
+    rule = f.get("rule") or None
     minconf = float(f["minconf"]) if f.get("minconf") else None
     try:
         manager.start("review-group", lambda j: pipeline.review_group(field, cur, prop, decision, action, minconf, user=user, stop=j.should_stop, log=j.say,
-                                                                       progress=lambda p: j.progress.update(p)),
-                      {"field": field, "current": cur, "proposed": prop, "decision": decision, "action": action})
+                                                                       progress=lambda p: j.progress.update(p), rule=rule),
+                      {"field": field, "current": cur, "proposed": prop, "decision": decision, "action": action, "rule": rule})
     except (RuntimeError, ValueError) as e:
         return back("/review/groups", str(e), True)
-    return back(f"/review/groups?field={field}&action={action}&minconf={f.get('minconf') or ''}", "已在后台执行整组操作，完成后刷新本页")
+    return back(f"/review/groups?field={field}&action={action}&minconf={f.get('minconf') or ''}&by={'rule' if rule else 'value'}", "已在后台执行整组操作，完成后刷新本页")
 
 
 @app.post("/review/void-stale")

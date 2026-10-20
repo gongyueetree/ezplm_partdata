@@ -13,6 +13,8 @@ no_flag:
   - {current: "片上系统", proposed: "FPGA"}
   - {current: "微处理器|微控制器|片上系统|DSP|FPGA", proposed: "存储器"}
   - {current: "存储器 - 模块", proposed: "存储器 > 存储器$"}
+  # 隔离式 CAN/RS-485/I²C/USB 收发器：ezPLM 分类树照 DigiKey，归在数字隔离器下（类型标 CAN 等）
+  - {current: "数字隔离器", proposed: "CAN|RS232|RS422|RS485|I2C|I²C|USB|驱动器，接收器，收发器"}
 keyword:
   # 处理器描述里常见"支持 DDR2/3 内存"（MPC8536 等被判成存储器），排除处理器类描述
   # 型号里也会出现 DRAM 字样（SICK 料位开关 LBV320-XXTGDRAMX01100 被判成存储器）：英文缩写前后不能紧挨字母/数字
@@ -26,7 +28,7 @@ keyword:
   - {pattern: "现场可编程门阵列|\\bFPGA\\b", exclude: "片上系统|SoC|MPSoC|RFSoC|Cortex-A|A53|处理器", category: "FPGA（现场可编程门阵列）", conf: 0.9}
   - {pattern: "带微控制器的 FPGA|集成微控制器的现场可编程", category: "带微控制器的 FPGA（现场可编程门阵列）", conf: 0.95}
   - {pattern: "齐纳二极管|稳压二极管|Zener", category: "单齐纳二极管", conf: 0.9}
-  - {pattern: "TVS|瞬态电压抑制", category: "TVS 二极管", conf: 0.9}
+  - {pattern: "TVS|瞬态电压抑制|transient voltage suppress", category: "TVS 二极管", conf: 0.9}
   - {pattern: "肖特基|整流二极管|快恢复二极管|Schottky", category: "单二极管", conf: 0.85}
   - {pattern: "双 ?[NP] ?沟道|Dual.*MOSFET|MOSFET 阵列", category: "FET、MOSFET 阵列", conf: 0.9}
   - {pattern: "[NP] ?沟道.*MOSFET|MOSFET.*[NP] ?沟道|MOSFET.*(DPAK|SOT|TO-)", category: "单 FET，MOSFET", conf: 0.88}
@@ -42,7 +44,8 @@ keyword:
   - {pattern: "数模转换器|\\bDAC\\b", category: "数模转换器（DAC）", conf: 0.85}
   - {pattern: "时钟发生器|频率合成器|\\bPLL\\b|扇出缓冲器|时钟缓冲", category: "时钟发生器，PLL，频率合成器", conf: 0.85}
   - {pattern: "实时时钟|\\bRTC\\b", category: "实时时钟", conf: 0.9}
-  - {pattern: "旋转编码器|光学编码器|PPR", category: "编码器", conf: 0.9}
+  # PPR（每转脉冲数）必须是独立单词：不区分大小写时 "suppressor""approximately" 里都有 ppr（TVS、触摸按键芯片曾被判成编码器）
+  - {pattern: "旋转编码器|光学编码器|(?<![A-Za-z])PPR(?![A-Za-z])", category: "编码器", conf: 0.9}
   - {pattern: "射频.*滤波器|RF ?滤波器|带通.*滤波|低通.*滤波|高通.*滤波", category: "RF 滤波器", conf: 0.9}
   - {pattern: "SAW 滤波器|声表面波", category: "SAW 滤波器", conf: 0.9}
   - {pattern: "数据缓冲器|总线收发器|线路驱动器|缓冲器.*收发", category: "缓冲器，驱动器，接收器，收发器", conf: 0.75}

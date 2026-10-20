@@ -334,8 +334,13 @@ class Classifier:
             conf = min(0.99, conf + 0.08 * (len(agreeing) - 1))
         if len(score) > 1:                          # 有分歧 → 扣减
             conf = conf * (score[best] / sum(score.values()))
-        return Candidate(best, round(conf, 3), "+".join(sorted({c.method.split(":")[0] for c in agreeing})),
-                         {"layers": [{"m": c.method, "cat": self.tax.path(c.category_id), "conf": c.conf} for c in cands]})
+        # rule：给出这个分类的规则原文（分组复核按规则汇总用：一条规则对就整组通过，错就整组驳回并修规则）
+        rule = next((c.evidence.get("pattern") for c in agreeing if c.method.startswith("rule") and c.evidence.get("pattern")), None)
+        ev = {"layers": [{"m": c.method, "cat": self.tax.path(c.category_id), "conf": c.conf, **({"p": c.evidence["pattern"]} if c.evidence.get("pattern") else {})}
+                         for c in cands]}
+        if rule:
+            ev["rule"] = rule
+        return Candidate(best, round(conf, 3), "+".join(sorted({c.method.split(":")[0] for c in agreeing})), ev)
 
     def classify_many(self, parts: list[Part]) -> list[Proposal]:
         """批量分类：近邻一次算完整批，其余逻辑与 classify 相同。"""

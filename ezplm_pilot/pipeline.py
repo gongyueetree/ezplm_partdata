@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import random
 import time
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
@@ -250,12 +251,21 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
             except Exception:
                 pass
         props: list[Proposal] = []
-        for name, fn in (("分类", lambda: clf.classify_many(parts)), ("封装(MPN映射)", lambda: list(propose_footprints_by_mpn(parts, idx)) if idx else []),
+        # IHS 先匹配：缺描述的物料用 IHS 描述补进分类输入（只作分类依据，写不写描述仍走 IHS 建议）
+        t1 = time.perf_counter()
+        try:
+            ihs_props = ihs.propose(parts)
+        except Exception as e:  # noqa
+            log(f"  ! IHS模块出错，本批跳过该模块：{str(e)[:200]}")
+            ihs_props, ihs.best = [], {}
+        timing["IHS"] = time.perf_counter() - t1
+        clf_parts, ihs_desc = _with_ihs_desc(parts, ihs.best)
+        for name, fn in (("分类", lambda: _tag_ihs_desc(clf.classify_many(clf_parts), ihs_desc)), ("封装(MPN映射)", lambda: list(propose_footprints_by_mpn(parts, idx)) if idx else []),
                          ("封装", lambda: list(pkg.propose(parts, attrs))),
                          ("ezPLM 符号", lambda: ezlib.propose_symbols_by_mpn(parts, auto_fill_min)),
                          ("符号", lambda: list(propose_symbols([p for p in parts if p.id not in {x.part_id for x in props if x.field == "symbol"}], idx, matcher=sym_matcher)) if idx else []),
                          ("链接", lambda: list(urlf.propose(parts)) if urlf else []),
-                         ("IHS", lambda: _ihs_props(ihs, parts, by_id, props))):
+                         ("IHS 去重", lambda: _ihs_props(ihs_props, by_id, props, ihs.best))):
             t1 = time.perf_counter()
             try:
                 props += fn()
@@ -294,16 +304,36 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
     return stats
 
 
-def _ihs_props(ihs: IhsMatcher, parts: list[Part], by_id: dict, existing: list[Proposal]) -> list[Proposal]:
+def _with_ihs_desc(parts: list[Part], best: dict) -> tuple[list[Part], set]:
+    """分类输入：中英文描述都空、且 IHS 有可信匹配（非 L5、置信度 ≥ 0.6）的物料，借用 IHS 描述。返回 (分类用物料, 借用了的物料 ID)。"""
+    out, used = [], set()
+    for p in parts:
+        b = best.get(p.id)
+        if b and not (p.description or p.description_en) and b[1] != "L5" and b[2] >= 0.6 and b[0].description:
+            p = replace(p, description_en=b[0].description)
+            used.add(p.id)
+        out.append(p)
+    return out, used
+
+
+def _tag_ihs_desc(props: list[Proposal], used: set) -> list[Proposal]:
+    for p in props:
+        if p.part_id in used:
+            p.evidence["ihs_desc"] = True
+            p.tags = [*p.tags, "依据IHS描述"]
+    return props
+
+
+def _ihs_props(ihs_props: list[Proposal], by_id: dict, existing: list[Proposal], best: dict) -> list[Proposal]:
     """IHS 建议；与本批其它模块重复（同物料、同字段、同建议值）的不再重复出。顺带记下每个物料的最佳 IHS 匹配。"""
     for sp in by_id.values():
         if sp.mpn_norm is None:
             sp.mpn_norm = norm_mpn(sp.mpn)
     seen = {(p.part_id, p.field, p.proposed) for p in existing}
-    out = [p for p in ihs.propose(parts) if (p.part_id, p.field, p.proposed) not in seen]
+    out = [p for p in ihs_props if (p.part_id, p.field, p.proposed) not in seen]
     for pid, sp in by_id.items():
-        best = ihs.best.get(pid)
-        sp.ihs_objid, sp.ihs_match = (best[0].objid, best[1]) if best else (None, None)
+        b = best.get(pid)
+        sp.ihs_objid, sp.ihs_match = (b[0].objid, b[1]) if b else (None, None)
     return out
 
 
@@ -360,7 +390,7 @@ def ihs_match(batch: int = 500, job: str | None = None, only_matched: bool = Tru
         for o in db.execute(select(StagedProposal).where(StagedProposal.part_id.in_(list(by_id)), StagedProposal.review_status == "pending",
                                                          or_(StagedProposal.method.like("ihs%"), StagedProposal.method == "mfr-lineage"))).scalars():
             o.review_status = "rejected"; o.review_note = "superseded by ihs-match"
-        props = _ihs_props(ihs, [_to_part(r) for r in rows], by_id, [])
+        props = _ihs_props(ihs.propose([_to_part(r) for r in rows]), by_id, [], ihs.best)
         by_field = _save_proposals(db, props, by_id, job, tax, stats)
         stats["parts"] += len(rows)
         stats["matched"] += len(ihs.best)
@@ -452,7 +482,20 @@ def review(proposal_id: int, decision: str, user: str = "admin", note: str = "")
 
 
 # --------------------------------------------------------------------------- 分组复核
-def _group_filter(stmt, field: str, current: str | None, proposed: str | None, action: str = "", minconf: float | None = None):
+NO_RULE = "__none__"                                 # 分组复核：没有规则参与（只靠近邻 / 大模型）的建议
+
+
+def rule_filter(stmt, rule: str | None):
+    """按给出建议的规则原文筛选（规则记在 evidence_json 的 "rule" 里）；NO_RULE = 没有规则参与的。"""
+    if rule is None:
+        return stmt
+    if rule == NO_RULE:
+        return stmt.where(~StagedProposal.evidence_json.contains('"rule": ', autoescape=True))
+    return stmt.where(StagedProposal.evidence_json.contains(json.dumps({"rule": rule}, ensure_ascii=False)[1:-1], autoescape=True))
+
+
+def _group_filter(stmt, field: str, current: str | None, proposed: str | None, action: str = "", minconf: float | None = None, rule: str | None = None):
+    stmt = rule_filter(stmt, rule)
     stmt = stmt.where(StagedProposal.review_status == "pending", StagedProposal.field == field)
     if current is not None:
         stmt = stmt.where(or_(StagedProposal.current == "", StagedProposal.current.is_(None)) if current == "" else StagedProposal.current == current)
@@ -463,6 +506,26 @@ def _group_filter(stmt, field: str, current: str | None, proposed: str | None, a
     if minconf is not None:
         stmt = stmt.where(StagedProposal.confidence >= minconf)
     return stmt
+
+
+def review_groups_by_rule(db, field: str = "category_id", action: str = "", minconf: float | None = None, limit: int = 300) -> tuple[list[dict], int]:
+    """待复核建议按"给出它的规则 → 建议值"分组（一条规则对就整组通过，错就整组驳回并修规则）。在 Python 里汇总 evidence。"""
+    rows = db.execute(_group_filter(select(StagedProposal.current, StagedProposal.proposed, StagedProposal.action, StagedProposal.confidence,
+                                           StagedProposal.evidence_json), field, None, None, action, minconf)).all()
+    agg: dict = {}
+    for cur, prop, act, conf, ev in rows:
+        try:
+            rule = json.loads(ev or "{}").get("rule") or NO_RULE
+        except ValueError:
+            rule = NO_RULE
+        k = (cur or "", prop, act, rule)
+        g = agg.setdefault(k, {"current": k[0], "proposed": prop, "action": act, "rule": rule, "n": 0, "sum": 0.0, "min": 1.0, "max": 0.0})
+        c = float(conf or 0)
+        g["n"] += 1; g["sum"] += c; g["min"] = min(g["min"], c); g["max"] = max(g["max"], c)
+    groups = sorted(agg.values(), key=lambda g: -g["n"])
+    for g in groups:
+        g["avg"] = g.pop("sum") / g["n"]
+    return groups[:limit], len(groups)
 
 
 def review_groups(db, field: str = "category_id", action: str = "", minconf: float | None = None, limit: int = 300) -> tuple[list[dict], int]:
@@ -478,17 +541,17 @@ def review_groups(db, field: str = "category_id", action: str = "", minconf: flo
 
 
 def review_group(field: str, current: str, proposed: str, decision: str, action: str = "", minconf: float | None = None, user: str = "admin",
-                 stop=None, log=None, progress=None) -> dict:
+                 stop=None, log=None, progress=None, rule: str | None = None) -> dict:
     """整组通过 / 驳回。通过时写新值，并作废同物料同字段的其它待复核建议；驳回记为 group-rejected（可作为规则改进的样本）。"""
     if decision not in ("approve", "reject"):
         raise ValueError(decision)
     log = log or (lambda m: None)
     db = get_session()
     tax = load_taxonomy(db)
-    total = db.execute(select(func.count()).select_from(_group_filter(select(StagedProposal.id), field, current, proposed, action, minconf).subquery())).scalar() or 0
+    total = db.execute(select(func.count()).select_from(_group_filter(select(StagedProposal.id), field, current, proposed, action, minconf, rule).subquery())).scalar() or 0
     done, now = 0, datetime.utcnow()
     while True:
-        prs = db.execute(_group_filter(select(StagedProposal), field, current, proposed, action, minconf).order_by(StagedProposal.id).limit(1000)).scalars().all()
+        prs = db.execute(_group_filter(select(StagedProposal), field, current, proposed, action, minconf, rule).order_by(StagedProposal.id).limit(1000)).scalars().all()
         if not prs:
             break
         parts = {sp.id: sp for sp in db.execute(select(StagedPart).where(StagedPart.id.in_({p.part_id for p in prs}))).scalars()}
@@ -509,7 +572,7 @@ def review_group(field: str, current: str, proposed: str, decision: str, action:
         if stop and stop():
             break
     db.close()
-    return {"decision": decision, "field": field, "done": done, "total": total}
+    return {"decision": decision, "field": field, "rule": rule, "done": done, "total": total}
 
 
 # --------------------------------------------------------------------------- export
