@@ -271,6 +271,7 @@ REVIEW = """{% extends "base" %}{% block body %}
 <select name=action><option value="">— 动作 —</option>{% for v in ['flag_mismatch','review'] %}<option {{ 'selected' if action==v }}>{{ v }}</option>{% endfor %}</select>
 <select name=status><option value=pending {{ 'selected' if status=='pending' }}>待复核</option><option value=auto {{ 'selected' if status=='auto' }}>自动写入（抽检）</option><option value=approved {{ 'selected' if status=='approved' }}>已通过</option><option value=rejected {{ 'selected' if status=='rejected' }}>已驳回</option></select>
 <input name=minconf value="{{ minconf }}" placeholder="最低置信度" style="width:110px"><button class=pri>筛选</button><span class=mute>共 {{ total }} 条</span>
+{% if status=='pending' %}<form class=inline method=post action="/review/dedupe" onsubmit="return confirm('作废重复的待复核建议（同一物料、同一字段、同一建议值只留最新一条）？')"><button>清理重复建议</button></form>{% endif %}
 {% if status=='pending' and rows %}<form class=inline method=post action="/review/bulk?next={{ next|urlencode }}"><input type=hidden name=ids value="{{ rows|map(attribute='0.id')|join(',') }}"><button class=ok onclick="return confirm('通过本页全部 {{ rows|length }} 条？')">本页全部通过</button></form>{% endif %}</form>
 <table><tr><th>型号</th><th>制造商</th><th>描述</th><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>操作</th></tr>
 {% for r,p in rows %}<tr>
@@ -661,6 +662,11 @@ async def review_bulk(request: Request, next: str = "", user: str = Depends(auth
             except KeyError:
                 pass
     return back(next or "/review", f"已通过 {n} 条")
+
+
+@app.post("/review/dedupe")
+def review_dedupe(user: str = Depends(auth)):
+    return back("/review", f"已作废重复建议 {pipeline.dedupe_pending()} 条")
 
 
 @app.post("/review/{rid}/{decision}")

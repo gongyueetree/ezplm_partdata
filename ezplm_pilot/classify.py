@@ -38,6 +38,7 @@ class Policy:
     propose_min: float = 0.30        # 低于此置信度的猜测不生成建议（避免噪声进复核队列）
     knn_k: int = 7
     llm_band: tuple = (0.45, 0.85)   # 置信度落在此区间 → 送 LLM 仲裁
+    knn_only_max: float = 0.80       # 只有近邻支持（无规则/LLM）时的置信度上限：近邻会被同厂商、相似型号带偏（如 TL432 → LED 驱动器），不能单独自动写入或判错
     use_llm: bool = True
 
 
@@ -319,6 +320,9 @@ class Classifier:
         if kv:
             cands.append(kv)
         merged = self._merge(cands)
+        if merged is not None and merged.method == "knn" and merged.conf > self.policy.knn_only_max:
+            merged.evidence["knn_capped_from"] = merged.conf
+            merged.conf = self.policy.knn_only_max
         if self.llm and (merged is None or merged.conf < self.policy.auto_fill_min or (p.category_id and merged.category_id != p.category_id)):
             seed = [c.category_id for c in cands if c.category_id] + ([p.category_id] if p.category_id else [])
             lv = self.llm.arbitrate(p, seed)

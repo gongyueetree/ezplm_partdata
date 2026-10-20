@@ -19,7 +19,8 @@ keyword:
   - {pattern: "\\bIGBT\\b", category: "单 IGBT", conf: 0.8}
   - {pattern: "NPN|PNP|双极晶体管|BJT", category: "单双极晶体管", conf: 0.8}
   - {pattern: "LDO|线性稳压器|低压差", category: "稳压器 - 线性稳压器控制器", conf: 0.6}
-  - {pattern: "DC[/-]?DC.*(转换器|稳压|开关)|降压|升压|Buck|Boost", category: "稳压器 - DC-DC 开关稳压器", conf: 0.85}
+  # 排除电源模块（如 "DC/DC转换器 – 机箱安装型 120W …8thBrick"）：它们不是 IC，交给近邻/LLM/人工
+  - {pattern: "DC[/-]?DC.*(转换器|稳压|开关)|降压|升压|Buck|Boost", exclude: "模块|机箱安装|板安装|[Bb]rick|砖", category: "稳压器 - DC-DC 开关稳压器", conf: 0.85}
   - {pattern: "电压基准|基准电压", category: "电压基准", conf: 0.9}
   - {pattern: "运算放大器|运放|仪表放大器|Op ?Amp", category: "仪器，运算放大器，缓冲器", conf: 0.85}
   - {pattern: "比较器", category: "线性 > 比较器", conf: 0.8}
@@ -46,7 +47,8 @@ keyword:
   - {pattern: "电池充电|充电管理|充电器 IC", category: "电池充电器", conf: 0.85}
   - {pattern: "电源开关|负载开关|配电开关|eFuse", category: "电源开关，配电开关，负载驱动器", conf: 0.85}
   - {pattern: "固定电感|功率电感|贴片电感", category: "固定电感器", conf: 0.85}
-  - {pattern: "多层陶瓷电容|MLCC|陶瓷电容", category: "陶瓷电容器", conf: 0.9}
+  # 排除稳压器描述里常见的 "针对使用陶瓷电容的操作进行优化 / 可提供 300mA 连续电流"
+  - {pattern: "多层陶瓷电容|MLCC|陶瓷电容", exclude: "稳压|LDO|低压差|调节器|输出电压|输出电流|连续电流", category: "陶瓷电容器", conf: 0.9}
   - {pattern: "铝电解电容", category: "铝电解电容器", conf: 0.9}
   - {pattern: "钽电容", category: "钽电容器", conf: 0.9}
   - {pattern: "贴片电阻|厚膜电阻|薄膜电阻|片式电阻", category: "片式贴装电阻器", conf: 0.9}

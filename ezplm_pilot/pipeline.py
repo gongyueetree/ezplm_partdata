@@ -354,6 +354,30 @@ def ihs_match(batch: int = 500, job: str | None = None, only_matched: bool = Tru
     return stats
 
 
+def dedupe_pending(log=None) -> int:
+    """同一物料、同一字段、同一建议值的多条待复核建议只留最新一条，其余作废。
+    （两个实例同时处理同一批物料时会出现，见 jobs.py 的跨实例锁。）"""
+    from sqlalchemy import update
+    log = log or (lambda m: None)
+    db = get_session()
+    rows = db.execute(select(StagedProposal.id, StagedProposal.part_id, StagedProposal.field, StagedProposal.proposed)
+                      .where(StagedProposal.review_status == "pending").order_by(StagedProposal.id.desc())).all()
+    seen, dup = set(), []
+    for pid_, part_id, field, proposed in rows:
+        k = (part_id, field, proposed)
+        if k in seen:
+            dup.append(pid_)
+        else:
+            seen.add(k)
+    for i in range(0, len(dup), 1000):
+        db.execute(update(StagedProposal).where(StagedProposal.id.in_(dup[i:i + 1000]))
+                   .values(review_status="rejected", review_note="duplicate", reviewed_at=datetime.utcnow()))
+    db.commit()
+    db.close()
+    log(f"待复核 {len(rows)} 条，作废重复 {len(dup)} 条")
+    return len(dup)
+
+
 # --------------------------------------------------------------------------- review
 def review(proposal_id: int, decision: str, user: str = "admin", note: str = "") -> StagedProposal:
     db = get_session()
