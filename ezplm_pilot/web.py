@@ -186,9 +186,9 @@ JOBS = """{% extends "base" %}{% block body %}
 <form class=inline method=post action="/jobs/start"><input type=hidden name=kind value=ezplm-lib><button class=pri {{ 'disabled' if busy }}>从 ezPLM 拉取厂商、符号、封装清单</button></form></div>
 
 <div class=panel><h2>开源硬件工程（封装）</h2>
-<p class=mute>开源工作区约 1.4 万个 KiCad 工程的 BOM 行（后端导出 CSV，本地 <code>cli oshw-load</code> 导入）：已导入 BOM 行 {{ oshw.items }} 条（{{ oshw.boms }} 个工程文件）。
+<p class=mute>开源工作区约 1.4 万个 KiCad 工程的 BOM 行（后端导出 CSV，本地 <code>cli oshw-load</code> 导入）：已导入 BOM 行 {{ oshw.n_items }} 条（{{ oshw.n_boms }} 个工程文件）。
 按型号（mpn 或 value 里的完整型号；通用型号需封装一致）匹配物料，按工程数投票，给还没有封装的物料出封装建议。纯规则，可重复执行。</p>
-<form class=inline method=post action="/jobs/start"><input type=hidden name=kind value=oshw-match><button class=pri {{ 'disabled' if busy or not oshw.items }}>按型号匹配开源工程</button></form></div>
+<form class=inline method=post action="/jobs/start"><input type=hidden name=kind value=oshw-match><button class=pri {{ 'disabled' if busy or not oshw.n_items }}>按型号匹配开源工程</button></form></div>
 
 <div class=panel><h2>IHS 参数（试点）</h2>
 <p class=mute>按分类让模型生成"IHS 参数列 → 关键参数"映射（每个分类调用一次），到 分类 → IHS 映射 页人工确认后，再写参数。
@@ -554,9 +554,9 @@ def _ez_counts(db) -> dict:
 def _oshw_counts(db) -> dict:
     from .staging import OshwBom, OshwItem
     try:
-        return {"items": db.execute(select(func.count(OshwItem.item_id))).scalar() or 0, "boms": db.execute(select(func.count(OshwBom.bom_id))).scalar() or 0}
+        return {"n_items": db.execute(select(func.count(OshwItem.item_id))).scalar() or 0, "n_boms": db.execute(select(func.count(OshwBom.bom_id))).scalar() or 0}
     except Exception:  # noqa
-        return {"items": 0, "boms": 0}
+        return {"n_items": 0, "n_boms": 0}
 
 
 def _run_oshw_match(job):
