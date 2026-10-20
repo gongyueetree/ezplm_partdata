@@ -175,8 +175,10 @@ def ensure_mpn_norm(db, chunk: int = 5000) -> int:
 def load(ihs_dir: str | Path, families: str = "", workers: int | None = None, log=print) -> dict:
     """把 IHS 记录导入 ihs_ref：型号（规范化）在暂存库中出现的全部导入；families（IHS 大类正则，如 "_IC"）命中的整类导入。
     批次按目录名排序依次 upsert，后到的增量覆盖先到的。可重复运行（ezPLM 陆续拉取后再跑一次即可补上新物料的匹配）。"""
+    import time
     from multiprocessing import Pool
     from sqlalchemy import delete, insert, select, func
+    from sqlalchemy.exc import OperationalError
     from .staging import IhsRef, StagedPart, get_session
 
     db = get_session()
@@ -191,16 +193,32 @@ def load(ihs_dir: str | Path, families: str = "", workers: int | None = None, lo
     lin = Lineage()
     stats = {"files": len(files), "rows": 0, "parts_matched": 0}
     workers = workers or max(1, (os.cpu_count() or 2) - 1)
+    def write(chunk, attempts: int = 6):
+        """先删后插同一批 Objectid，一批一提交；断线（Postgres 重启 / 公网代理掉线）后重连重试。"""
+        for k in range(attempts):
+            try:
+                db.execute(delete(IhsRef).where(IhsRef.objid.in_([r["objid"] for r in chunk])))
+                db.execute(insert(IhsRef), chunk)
+                db.commit()
+                return
+            except OperationalError as e:
+                try:
+                    db.rollback()
+                except Exception:  # noqa —— 连接已断，回滚也可能失败；会话下次执行时从连接池换新连接
+                    pass
+                if k == attempts - 1:
+                    raise
+                wait = min(60, 5 * 2 ** k)
+                log(f"  ! 写入失败：{str(e.orig or e).strip().splitlines()[0][:100]}；{wait} 秒后重连重试（{k + 1}/{attempts - 1}）")
+                time.sleep(wait)
+
     with Pool(workers, initializer=_init_worker, initargs=(keys, families)) as pool:
         for i, rows in enumerate(pool.imap(_parse_file, files)):        # imap 保持文件顺序 → 增量按日期覆盖
             for r in rows:
                 res = lin.resolve(r["mfr_ihs"], r["family"])
                 r["mfr_current"], r["lineage_conf"] = res["current"], res["conf"]
-            for j in range(0, len(rows), 2000):
-                chunk = rows[j:j + 2000]
-                db.execute(delete(IhsRef).where(IhsRef.objid.in_([r["objid"] for r in chunk])))
-                db.execute(insert(IhsRef), chunk)
-            db.commit()
+            for j in range(0, len(rows), 1000):
+                write(rows[j:j + 1000])
             stats["rows"] += len(rows)
             log(f"[{i + 1}/{len(files)}] {Path(files[i]).parent.name[:10]} {Path(files[i]).name}: {len(rows)} 条")
     stats["ihs_ref_total"] = db.execute(select(func.count(IhsRef.objid))).scalar()
