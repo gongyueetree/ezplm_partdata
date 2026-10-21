@@ -21,7 +21,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from jinja2 import DictLoader, Environment
 from sqlalchemy import func, or_, select
 
-from . import pipeline, previews, settings
+from . import pincheck, pipeline, previews, settings
 from .jobs import manager
 from .staging import CategoryParam, StagedCategory, StagedPart, StagedProposal
 from .staging import get_session as _new_session
@@ -166,7 +166,8 @@ JOBS = """{% extends "base" %}{% block body %}
 <p><button class=pri {{ 'disabled' if busy }}>开始处理</button> <span class=mute>待处理 {{ s.parts_total - s.parts_processed }} 条</span></p></form>
 <form class=inline method=post action="/jobs/reset-processed" onsubmit="return confirm('把所有物料标记为未处理？这些物料的待复核建议会作废（重新处理时重新生成）；已写入的新值保留。')"><button>重置处理状态（规则更新后重跑）</button></form>
 <form class=inline method=post action="/jobs/reset-pending-category" onsubmit="return confirm('把还有这类待复核建议的物料标成未处理？之后运行②处理会按新规则重新生成建议（导入的符号、开源工程建议不受影响）。')"><select name=field><option value=category_id>分类</option><option value=symbol>符号</option><option value=footprint>封装</option><option value=ihs>IHS 匹配丢失的</option></select> <button>只重跑有这类待复核建议的物料</button></form>
-<form class=inline method=post action="/jobs/recheck-footprints" onsubmit="return confirm('按新规则复查封装建议：引脚数对不上、阵列配了单个片式封装的，待复核的驳回、已自动写入的撤销，并把这些物料标成未处理。同时恢复被误作废的导入符号建议。')"><button {{ 'disabled' if busy }}>复查封装建议（引脚数/阵列）</button></form></div>
+<form class=inline method=post action="/jobs/recheck-footprints" onsubmit="return confirm('按新规则复查封装建议：引脚数对不上、阵列配了单个片式封装的，待复核的驳回、已自动写入的撤销，并把这些物料标成未处理。同时恢复被误作废的导入符号建议。')"><button {{ 'disabled' if busy }}>复查封装建议（引脚数/阵列）</button></form>
+<form class=inline method=post action="/jobs/pincheck"><button {{ 'disabled' if busy }}>引脚核对（器件/符号/封装）</button></form></div>
 
 <div class=panel><h2>③ 扫描符号/封装来源（scan）</h2>
 <form class=frm method=post action="/jobs/start"><input type=hidden name=kind value=scan>
@@ -277,7 +278,13 @@ PART = """{% extends "base" %}{% import "preview" as P %}{% block topright %}<sp
 {% if x.r.datasheet %}<a href="{{ x.r.datasheet }}" target=_blank rel=noopener>IHS 数据手册链接（多已失效）</a>{% endif %}</details></td></tr>{% endfor %}</table></div>
 <p class=mute>绿色行是本物料的最佳匹配，IHS 建议依据它生成。L5（同号异厂）只作参考，不出建议。状态和数据手册链接是 2012 年的数据。{% if ihs.total > ihs.rows|length %}只显示前 {{ ihs.rows|length }} 条。{% endif %}</p>
 {% else %}<p class=mute>IHS 中没有同型号记录。{% if not ihs_n %}暂存库里还没有 IHS 参考数据：在本地运行 <code>python -m ezplm_pilot.cli ihs-load --dir &lt;IHS数据目录&gt;</code>。{% endif %}</p>{% endif %}</div>
-<div class=panel><h2>符号 / 封装 / 3D 预览</h2>{{ P.cards(pv) }}</div>
+<div class=panel><h2>符号 / 封装 / 3D 预览</h2>
+{% if pc.results or pc.chip.pins %}<div style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:12px;background:{{ {'err':'#fef2f2','warn':'#fffbeb','ok':'#f0fdf4'}.get(pc.worst, '#fff') }}">
+<b>引脚核对</b> <span class=mute>器件 {{ pc.chip.pins or '?' }} 脚{% if pc.chip.pins %}（{{ pc.chip.src }}）{% endif %}{{ ' · 带裸露焊盘' if pc.chip.ep }} · 符号 {{ pc.sym_n or '—' }} 个引脚 · 封装 {{ pc.fp_n or '—' }} 个焊盘编号</span>
+{% for lv, msg in pc.results %}<div style="color:{{ {'err':'var(--bad)','warn':'var(--warn)','ok':'var(--ok)'}[lv] }}">{{ {'err':'✖','warn':'⚠','ok':'✔'}[lv] }} {{ msg }}</div>{% endfor %}
+{% if pc.ep_fix %}<form class=inline method=post action="/parts/{{ p.id }}/set-footprint" style="margin-top:4px;display:block"><input type=hidden name=footprint value="{{ pc.ep_fix.split(':')[-1] }}"><span class=mute>带散热焊盘的同尺寸封装：</span><a href="/preview?fp={{ pc.ep_fix|urlencode }}" target=_blank>{{ pc.ep_fix }}</a> <button class=ok onclick="return confirm('把新封装改成 {{ pc.ep_fix }}？')">改用这个封装</button></form>{% endif %}
+</div>{% endif %}
+{{ P.cards(pv) }}</div>
 <div class=panel><h2>建议与复核</h2>
 <table><tr><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>状态</th><th>操作</th><th>证据</th></tr>
 {% for r in props %}<tr class="{{ 'new' if r.review_status in ('auto','approved') }}">
@@ -295,7 +302,20 @@ REVIEW = """{% extends "base" %}{% block topright %}<a class=btn href="/review/g
 <select name=field><option value="">— 字段 —</option>{% for v in ['category_id','symbol','footprint','url','datasheet','description_en','manufacturer'] %}<option {{ 'selected' if field==v }}>{{ v }}</option>{% endfor %}</select>
 <select name=action><option value="">— 动作 —</option>{% for v in ['flag_mismatch','review'] %}<option {{ 'selected' if action==v }}>{{ v }}</option>{% endfor %}</select>
 <select name=status><option value=pending {{ 'selected' if status=='pending' }}>待复核</option><option value=auto {{ 'selected' if status=='auto' }}>自动写入（抽检）</option><option value=approved {{ 'selected' if status=='approved' }}>已通过</option><option value=rejected {{ 'selected' if status=='rejected' }}>已驳回</option></select>
-<input name=minconf value="{{ minconf }}" placeholder="最低置信度" style="width:110px"><button class=pri>筛选</button><span class=mute>共 {{ total }} 条</span></form>
+<input name=minconf value="{{ minconf }}" placeholder="最低置信度" style="width:110px">
+<input name=mfr value="{{ mfr }}" placeholder="厂商（包含）" style="width:150px"><input name=proposed value="{{ proposed if proposed is not none else '' }}" placeholder="建议值（完全相同）" style="width:200px">
+{% if cat %}<input type=hidden name=cat value="{{ cat }}"><span class=tag title="{{ cat_label }}">分类：{{ cat_label.split(' > ')[-1] }}</span>{% endif %}
+{% if current is not none %}<input type=hidden name=current value="{{ current }}">{% endif %}{% if rule is not none %}<input type=hidden name=rule value="{{ rule }}">{% endif %}
+<button class=pri>筛选</button><span class=mute>共 {{ total }} 条</span>{% if mfr or cat or proposed is not none %} <a href="/review?field={{ field }}&status={{ status }}">清除筛选</a>{% endif %}</form>
+{% if narrowed and status=='pending' and total %}<div class=filters style="background:#eef2ff;padding:8px 10px;border-radius:8px">
+<span>按当前筛选整批处理（共 <b>{{ total }}</b> 条，不止本页）：</span>
+{% for d, lab, cls in [('approve','全部通过','ok'),('reject','全部驳回','bad')] %}<form class=inline method=post action="/review/filter-apply" onsubmit="return confirm('{{ lab }}筛选出的 {{ total }} 条建议？')">
+<input type=hidden name=decision value={{ d }}><input type=hidden name=field value="{{ field }}"><input type=hidden name=action value="{{ action }}"><input type=hidden name=minconf value="{{ minconf }}">
+<input type=hidden name=mfr value="{{ mfr }}"><input type=hidden name=cat value="{{ cat }}"><input type=hidden name=next value="{{ next }}">
+{% if proposed is not none %}<input type=hidden name=proposed value="{{ proposed }}"><input type=hidden name=proposed_set value=1>{% endif %}
+{% if current is not none %}<input type=hidden name=current value="{{ current }}"><input type=hidden name=current_set value=1>{% endif %}
+{% if rule is not none %}<input type=hidden name=rule value="{{ rule }}"><input type=hidden name=rule_set value=1>{% endif %}
+<button class={{ cls }}>{{ lab }}</button></form>{% endfor %}</div>{% endif %}
 {# 操作按钮各自一个表单，放在筛选表单外面：表单不能嵌套，嵌套时浏览器会忽略内层表单，点按钮只会提交筛选 #}
 {% if status=='pending' %}<div class=filters>
 <form class=inline method=post action="/review/dedupe" onsubmit="return confirm('作废重复的待复核建议（同一物料、同一字段、同一建议值只留最新一条）？')"><button>清理重复建议</button></form>
@@ -304,7 +324,7 @@ REVIEW = """{% extends "base" %}{% block topright %}<a class=btn href="/review/g
 </div>{% endif %}
 <table><tr><th>型号</th><th>制造商</th><th>描述</th><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>操作</th></tr>
 {% for r,p in rows %}<tr>
-<td><a href="/parts/{{ p.id }}">{{ p.mpn }}</a></td><td class=mute>{{ p.manufacturer }}</td><td class=mute style="max-width:260px">{{ (p.description or '')[:80] }}</td>
+<td><a href="/parts/{{ p.id }}">{{ p.mpn }}</a></td><td class=mute>{{ p.manufacturer }}{% if p.manufacturer and status=='pending' %}<br><a href="/review?field={{ r.field }}&status=pending&mfr={{ p.manufacturer|urlencode }}&proposed={{ r.proposed|urlencode }}&cat={{ p.cat_id|urlencode }}" title="同厂商、同分类、同建议值的全部待复核建议（可整批通过/驳回）" style="font-size:12px">同类批量 →</a>{% endif %}</td><td class=mute style="max-width:260px">{{ (p.description or '')[:80] }}</td>
 <td>{{ r.field }}</td><td class=mute>{{ r.current_label or r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b>{% if r.field=='symbol' %}{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/preview?sym={{ ev.sha256 }}" target=_blank title="打开预览"><img src="/symbol-files/{{ ev.sha256 }}/preview.svg" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;background:#fff;margin-top:4px" onerror="this.remove()"></a>{% elif r.proposed %}<br><a href="/preview?symname={{ r.proposed|urlencode }}" target=_blank title="打开预览"><img src="/symbols/preview.svg?name={{ r.proposed|urlencode }}" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;background:#fff;margin-top:4px" onerror="this.remove()"></a>{% endif %}{% elif r.field=='footprint' and r.proposed %}<br><a href="/preview?fp={{ r.proposed|urlencode }}" target=_blank title="打开预览"><img src="/footprints/preview.svg?name={{ r.proposed|urlencode }}" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;margin-top:4px" onerror="this.remove()"></a>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
 <td class="act-{{ r.action }}">{{ r.action }}</td><td class=mute>{{ r.method }}</td>
 <td style="white-space:nowrap">{% if r.review_status=='pending' %}<form class=inline method=post action="/review/{{ r.id }}/approve?next={{ next|urlencode }}"><button class=ok>通过</button></form> <form class=inline method=post action="/review/{{ r.id }}/reject?next={{ next|urlencode }}"><button class=bad>驳回</button></form>
@@ -785,6 +805,15 @@ def jobs_recheck_footprints(user: str = Depends(auth)):
     return back("/jobs", "已开始复查封装建议，完成后运行 ② 处理重新出建议")
 
 
+@app.post("/jobs/pincheck")
+def jobs_pincheck(user: str = Depends(auth)):
+    try:
+        manager.start("pincheck", lambda j: pincheck.run_all(stop=j.should_stop, log=j.say, progress=lambda p: j.progress.update(p)), {})
+    except RuntimeError as e:
+        return back("/jobs", str(e), True)
+    return back("/jobs", "已开始引脚核对；完成后在物料信息页按标签「引脚不一致」「引脚待确认」「可换EP封装」筛选")
+
+
 @app.get("/api/jobs/current")
 def api_job(user: str = Depends(auth)):
     return JSONResponse(manager.current.to_dict() if manager.current else None)
@@ -841,7 +870,7 @@ def part(request: Request, pid: str, user: str = Depends(auth)):
         from . import ihs_params as IP
         pnames = {t["key"]: t["name"] for t in IP.targets(db, pparams[0].category_id)}
     return render("part", request, title=p.mpn, nav="parts", user=user, p=p, props=props, tax=tax, leaves=tax.leaf_labels(),
-                  ihs=reference_rows(db, p, tax), ihs_n=IhsMatcher.n_ref(db), pparams=pparams, pnames=pnames, pv=previews.for_part(db, p, props))
+                  ihs=reference_rows(db, p, tax), ihs_n=IhsMatcher.n_ref(db), pparams=pparams, pnames=pnames, pv=(pv := previews.for_part(db, p, props)), pc=pincheck.for_part(db, p, pv))
 
 
 @app.post("/parts/{pid}/edit")
@@ -877,31 +906,67 @@ async def part_edit(request: Request, pid: str, user: str = Depends(auth)):
     return back(f"/parts/{pid}", "已保存")
 
 
+@app.post("/parts/{pid}/set-footprint")
+def part_set_footprint(pid: str, footprint: str = Form(...), user: str = Depends(auth)):
+    """引脚核对里"改用带散热焊盘的封装"：只改新封装，其它字段不动；留一条人工记录。"""
+    db = get_session()
+    p = db.get(StagedPart, pid)
+    if not p:
+        raise HTTPException(404)
+    old = p.new_footprint or p.orig_footprint or ""
+    p.new_footprint = footprint.strip() or None
+    pipeline._add_tags(p, ["人工修改", "引脚核对改封装"])
+    for o in db.execute(select(StagedProposal).where(StagedProposal.part_id == pid, StagedProposal.field == "footprint",
+                                                     StagedProposal.review_status == "pending")).scalars():
+        o.review_status, o.review_note, o.reviewed_by, o.reviewed_at = "rejected", "superseded by manual footprint", user, datetime.utcnow()
+    db.add(StagedProposal(part_id=pid, mpn=p.mpn, field="footprint", current=old, proposed=p.new_footprint, proposed_label=p.new_footprint,
+                          confidence=1.0, action="manual", method="manual:pincheck", evidence_json=json.dumps({"from": old}), tags="人工修改",
+                          review_status="approved", reviewed_by=user, reviewed_at=datetime.utcnow(), job="manual"))
+    db.commit()
+    return back(f"/parts/{pid}", f"新封装已改为 {p.new_footprint}")
+
+
 # ---- 复核
 @app.get("/review", response_class=HTMLResponse)
 def review_queue(request: Request, field: str = "", action: str = "", status: str = "pending", minconf: str = "", page: int = 1, size: int = 50,
-                 current: str | None = None, proposed: str | None = None, rule: str | None = None, user: str = Depends(auth)):
+                 current: str | None = None, proposed: str | None = None, rule: str | None = None, mfr: str = "", cat: str = "",
+                 user: str = Depends(auth)):
     db = get_session()
-    stmt = select(StagedProposal, StagedPart).join(StagedPart, StagedPart.id == StagedProposal.part_id).where(StagedProposal.review_status == status, StagedProposal.field != "manual")
-    if field:
-        stmt = stmt.where(StagedProposal.field == field)
-    if action:
-        stmt = stmt.where(StagedProposal.action == action)
-    if minconf:
-        stmt = stmt.where(StagedProposal.confidence >= float(minconf))
-    if current is not None:                  # 从分组页"看样例"进来：只看这一组
-        stmt = stmt.where(or_(StagedProposal.current == "", StagedProposal.current.is_(None)) if current == "" else StagedProposal.current == current)
-    if proposed is not None:
-        stmt = stmt.where(StagedProposal.proposed == proposed)
-    stmt = pipeline.rule_filter(stmt, rule)
+    proposed = proposed if proposed not in ("",) else None
+    f = dict(field=field, action=action, minconf=minconf, current=current, proposed=proposed, rule=rule, mfr=mfr.strip(), cat=cat)
+    stmt = pipeline.review_stmt([StagedProposal, StagedPart], status=status, **f)
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar()
     rows = db.execute(stmt.order_by(StagedProposal.confidence.desc(), StagedPart.value_score.desc()).offset((page - 1) * size).limit(size)).all()
     tax = pipeline.load_taxonomy(db)
     for r, p in rows:
         r.current_label = tax.path(r.current) if (r.field == "category_id" and r.current in tax.nodes) else ""
+        p.cat_id = p.new_category_id or p.orig_category_id or ""
     from urllib.parse import quote
-    qs = f"field={field}&action={action}&status={status}&minconf={minconf}" + (f"&current={quote(current)}" if current is not None else "") + (f"&proposed={quote(proposed)}" if proposed is not None else "") + (f"&rule={quote(rule)}" if rule is not None else "")
-    return render("review", request, title="复核队列", nav="review", user=user, rows=rows, total=total, page=page, size=size, field=field, action=action, status=status, minconf=minconf, qs=qs, next=f"/review?{qs}&page={page}")
+    qs = f"field={field}&action={action}&status={status}&minconf={minconf}&mfr={quote(mfr)}&cat={quote(cat)}" + (f"&current={quote(current)}" if current is not None else "") \
+        + (f"&proposed={quote(proposed)}" if proposed is not None else "") + (f"&rule={quote(rule)}" if rule is not None else "")
+    narrowed = bool(field and (mfr or proposed is not None or cat or rule is not None or current is not None))   # 只有收窄过的筛选才给"整批"按钮
+    return render("review", request, title="复核队列", nav="review", user=user, rows=rows, total=total, page=page, size=size, field=field, action=action,
+                  status=status, minconf=minconf, mfr=mfr, cat=cat, cat_label=tax.path(cat) if cat in tax.nodes else cat, proposed=proposed,
+                  current=current, rule=rule, narrowed=narrowed, qs=qs, next=f"/review?{qs}&page={page}")
+
+
+@app.post("/review/filter-apply")
+async def review_filter_apply(request: Request, user: str = Depends(auth)):
+    """按当前筛选整批通过 / 驳回（后台任务）。"""
+    f = dict(await request.form())
+    decision = f.get("decision")
+    if decision not in ("approve", "reject") or not f.get("field"):
+        raise HTTPException(400)
+    filters = {k: (f.get(k) if f.get(k) != "__none__" else None) for k in pipeline.REVIEW_FILTERS}
+    for k in ("current", "proposed", "rule"):            # 这三项"没传"和"传空串"含义不同：空串 = 筛"现值为空"
+        if k + "_set" not in f:
+            filters[k] = None
+    try:
+        manager.start("review-filter", lambda j: pipeline.review_filtered(filters, decision, user=user, stop=j.should_stop, log=j.say,
+                                                                         progress=lambda p: j.progress.update(p)), {"decision": decision, **{k: v for k, v in filters.items() if v}})
+    except RuntimeError as e:
+        return back(f.get("next") or "/review", str(e), True)
+    return back(f.get("next") or "/review", f"已在后台{'通过' if decision == 'approve' else '驳回'}筛选出的全部建议，完成后刷新本页")
 
 
 @app.post("/review/bulk")

@@ -121,6 +121,19 @@ def _pad_svg(p: dict, box: _Box) -> str:
     return g
 
 
+def exposed_pads(pads: list[dict]) -> list[str]:
+    """散热焊盘（EP）的编号：面积远大于普通焊盘（> 4 倍中位数）的编号焊盘，最多 2 个编号（拆成多块的 EP 同号）。"""
+    area: dict = {}
+    for p in pads:
+        if p["number"] and p["type"] != "np_thru_hole":
+            area[p["number"]] = max(area.get(p["number"], 0), p["w"] * p["h"])
+    if len(area) < 3:
+        return []
+    med = sorted(area.values())[len(area) // 2]
+    big = [n for n, a in area.items() if med and a > 4 * med]
+    return big if 0 < len(big) <= 2 else []
+
+
 def preview(text: str) -> dict | None:
     """→ {name, svg, pads:[{number,type,shape,size,drill,count}], n_pads, size:"宽×高 mm"}；解析失败返回 None。"""
     try:
@@ -157,4 +170,5 @@ def preview(text: str) -> dict | None:
                     "shape": p["shape"], "size": f'{p["w"]:g}×{p["h"]:g}', "drill": "×".join(f"{d:g}" for d in p["drill"]), "count": 1}
     numbered = {p["number"] for p in pads if p["number"]}
     return {"name": str(root[1]) if len(root) > 1 else "", "svg": svg, "pads": list(rows.values()), "n_pads": len(numbered),
+            "numbers": sorted(numbered, key=_natkey), "ep": exposed_pads(pads),
             "size": f"{box.x1 - box.x0:.2f}×{box.y1 - box.y0:.2f} mm"}

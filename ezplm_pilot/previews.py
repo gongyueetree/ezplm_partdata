@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from functools import lru_cache
 from pathlib import Path
 
 from . import fprender, settings, symrender
@@ -85,6 +86,7 @@ def _symbol_text(name: str) -> tuple[str, str, str] | None:
     return None
 
 
+@lru_cache(maxsize=4096)
 def symbol_by_name(name: str) -> dict | None:
     got = _symbol_text(name)
     pv = symrender.preview(got[0], got[1]) if got else None
@@ -142,6 +144,7 @@ def model_bytes(rel: str) -> bytes | None:
     return _fetch("kicad-packages3D", rel, CACHE / "3d" / rel, timeout=40)
 
 
+@lru_cache(maxsize=4096)                              # 批量引脚核对时同一封装会反复用到
 def footprint_preview(name: str) -> dict | None:
     got = footprint_text(name)
     if not got:
@@ -166,8 +169,7 @@ def for_part(db, p, props) -> dict:
         # 导入的符号文件按 SHA 取；KiCad 库建议（如 Diode:BZX84Cxx）按名字到扫描过的库里取
         pv = symbol_by_sha(db, ev["sha256"]) if ev.get("sha256") else symbol_by_name(r.proposed)
         if pv and pv.get("units"):
-            pv.update(value=r.proposed, status={"approved": "已通过", "auto": "已自动写入", "pending": "建议（待复核）"}[r.review_status])
-            out["symbol"] = pv
+            out["symbol"] = {**pv, "value": r.proposed, "status": {"approved": "已通过", "auto": "已自动写入", "pending": "建议（待复核）"}[r.review_status]}
             break
     if not out["symbol"]:
         for val, st in ((p.new_symbol, "新值"), (p.orig_symbol, "ezPLM 现值")):

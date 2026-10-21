@@ -662,6 +662,68 @@ def review_group(field: str, current: str, proposed: str, decision: str, action:
     return {"decision": decision, "field": field, "rule": rule, "done": done, "total": total}
 
 
+REVIEW_FILTERS = ("field", "action", "minconf", "current", "proposed", "rule", "mfr", "cat")
+
+
+def review_stmt(cols, status: str = "pending", field: str = "", action: str = "", minconf=None, current=None, proposed=None,
+                rule=None, mfr=None, cat=None):
+    """复核队列的筛选（列表页和"按筛选整批通过/驳回"共用一套条件）。
+    mfr：厂商名包含；cat：物料分类（新分类或原分类）等于。"""
+    stmt = select(*cols).join(StagedPart, StagedPart.id == StagedProposal.part_id).where(StagedProposal.review_status == status,
+                                                                                        StagedProposal.field != "manual")
+    if field:
+        stmt = stmt.where(StagedProposal.field == field)
+    if action:
+        stmt = stmt.where(StagedProposal.action == action)
+    if minconf not in (None, ""):
+        stmt = stmt.where(StagedProposal.confidence >= float(minconf))
+    if current is not None:
+        stmt = stmt.where(or_(StagedProposal.current == "", StagedProposal.current.is_(None)) if current == "" else StagedProposal.current == current)
+    if proposed is not None:
+        stmt = stmt.where(StagedProposal.proposed == proposed)
+    if mfr:
+        stmt = stmt.where(StagedPart.manufacturer.ilike(f"%{mfr}%"))
+    if cat:
+        stmt = stmt.where(func.coalesce(StagedPart.new_category_id, StagedPart.orig_category_id) == cat)
+    return rule_filter(stmt, rule)
+
+
+def review_filtered(filters: dict, decision: str, user: str = "admin", stop=None, log=None, progress=None) -> dict:
+    """按复核队列当前筛选条件整批通过 / 驳回（如"Vishay 的电阻阵列、建议封装都是 SOIC-16"）。逻辑同 review_group。"""
+    if decision not in ("approve", "reject"):
+        raise ValueError(decision)
+    log = log or (lambda m: None)
+    f = {k: filters.get(k) for k in REVIEW_FILTERS}
+    db = get_session()
+    tax = load_taxonomy(db)
+    total = db.execute(select(func.count()).select_from(review_stmt([StagedProposal.id], **f).subquery())).scalar() or 0
+    done, now, last = 0, datetime.utcnow(), 0
+    while not (stop and stop()):
+        prs = db.execute(review_stmt([StagedProposal], **f).where(StagedProposal.id > last).order_by(StagedProposal.id).limit(1000)).scalars().all()
+        if not prs:
+            break
+        last = prs[-1].id
+        parts = {sp.id: sp for sp in db.execute(select(StagedPart).where(StagedPart.id.in_({p.part_id for p in prs}))).scalars()}
+        ids = {pr.id for pr in prs}
+        for pr in prs:
+            pr.review_status = "approved" if decision == "approve" else "rejected"
+            pr.reviewed_by, pr.reviewed_at, pr.review_note = user, now, f"filter-{decision}"
+            if decision == "approve" and pr.part_id in parts:
+                apply_proposal(db, parts[pr.part_id], pr, tax)
+        if decision == "approve":                       # 同物料同字段的其它待复核建议作废
+            for pr in prs:
+                for other in db.execute(select(StagedProposal).where(StagedProposal.part_id == pr.part_id, StagedProposal.field == pr.field,
+                                                                     StagedProposal.review_status == "pending", StagedProposal.id.notin_(ids))).scalars():
+                    other.review_status, other.review_note = "rejected", "superseded"
+        db.commit()
+        done += len(prs)
+        log(f"已{'通过' if decision == 'approve' else '驳回'} {done}/{total}")
+        if progress:
+            progress({"done": done, "total": total})
+    db.close()
+    return {"decision": decision, "filters": {k: v for k, v in f.items() if v not in (None, "")}, "done": done, "total": total}
+
+
 # --------------------------------------------------------------------------- export
 def export(out_path: str | Path | None = None, apply: bool = False, api=None, batch: int = 200, only_fields=None, job: str | None = None,
            stop=None, log=None, progress=None) -> dict:
