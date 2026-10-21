@@ -56,6 +56,8 @@ keyword:
   - {pattern: "(DC[/-]?DC|降压|升压|Buck|Boost).{0,12}(控制器|Controller)", exclude: "通孔型|表面贴装型|电荷泵|平滑|\\d+ ?小时|充电(?!泵)|功放|音频|Audio|MOSFET ?驱动|MOSFET Driver|电容|Capacitor|沟槽|Trench|MOS技术|[μµu]Module|LED|模块|机箱安装|板安装|[Bb]rick|砖", category: "DC-DC 开关控制器", conf: 0.85}
   - {pattern: "DC[/-]?DC.*(转换器|稳压|开关)|降压|升压|Buck|Boost", exclude: "通孔型|表面贴装型|电荷泵|充电泵|Charge Pump|平滑|\\d+ ?小时|充电(?!泵)|功放|音频|Audio|MOSFET ?驱动|MOSFET Driver|电容|Capacitor|沟槽|Trench|MOS技术|[μµu]Module|LED|控制器|Controller|模块|机箱安装|板安装|[Bb]rick|砖", category: "稳压器 - DC-DC 开关稳压器", conf: 0.85}
   - {pattern: "电压基准|基准电压", category: "电压基准", conf: 0.9}
+  # 电压检测/复位芯片（APX803、TPS38x、MAX809 一类）：近邻常把它们猜成电压基准
+  - {pattern: "电压检测器|电压监测器|电压监控器|复位芯片|复位IC|复位电路|上电复位|微处理器监控|看门狗|Supervisor|Voltage Detector|Reset IC|Watchdog", exclude: "电流|电池管理|电量|温度", category: "电源管理（PMIC） > 电源监控器", conf: 0.88}
   - {pattern: "运算放大器|运放|仪表放大器|Op ?Amp", category: "仪器，运算放大器，缓冲器", conf: 0.85}
   - {pattern: "比较器", category: "线性 > 比较器", conf: 0.8}
   - {pattern: "模数转换器|模/数.{0,8}转换器|A/D\\)? ?转换器|\\bADC\\b", category: "模数转换器（ADC）", conf: 0.85}
