@@ -21,7 +21,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from jinja2 import DictLoader, Environment
 from sqlalchemy import func, or_, select
 
-from . import pipeline, settings
+from . import pipeline, previews, settings
 from .jobs import manager
 from .staging import CategoryParam, StagedCategory, StagedPart, StagedProposal
 from .staging import get_session as _new_session
@@ -240,7 +240,7 @@ PARTS = """{% extends "base" %}{% block body %}
 <div class=pager>{% if page>1 %}<a href="?{{ qs }}&page={{ page-1 }}">上一页</a>{% endif %}<span>第 {{ page }} / {{ ((total-1)//size)+1 if total else 1 }} 页</span>{% if page*size<total %}<a href="?{{ qs }}&page={{ page+1 }}">下一页</a>{% endif %}</div>
 {% endblock %}"""
 
-PART = """{% extends "base" %}{% block topright %}<span class=mute>{{ p.manufacturer }} · {{ p.id }}</span>{% endblock %}{% block body %}
+PART = """{% extends "base" %}{% import "preview" as P %}{% block topright %}<span class=mute>{{ p.manufacturer }} · {{ p.id }}</span>{% endblock %}{% block body %}
 <div class=grid2>
 <div class=panel><h2>字段（原值 → 新值）</h2><table class=kv>
 <tr><td>描述</td><td>{{ p.description }}<br><span class=mute>{{ p.description_en }}</span>{% if p.new_description_en %}<br>→ <span class=diff>{{ p.new_description_en }}</span>{% endif %}</td></tr>
@@ -276,17 +276,18 @@ PART = """{% extends "base" %}{% block topright %}<span class=mute>{{ p.manufact
 {% if x.r.datasheet %}<a href="{{ x.r.datasheet }}" target=_blank rel=noopener>IHS 数据手册链接（多已失效）</a>{% endif %}</details></td></tr>{% endfor %}</table></div>
 <p class=mute>绿色行是本物料的最佳匹配，IHS 建议依据它生成。L5（同号异厂）只作参考，不出建议。状态和数据手册链接是 2012 年的数据。{% if ihs.total > ihs.rows|length %}只显示前 {{ ihs.rows|length }} 条。{% endif %}</p>
 {% else %}<p class=mute>IHS 中没有同型号记录。{% if not ihs_n %}暂存库里还没有 IHS 参考数据：在本地运行 <code>python -m ezplm_pilot.cli ihs-load --dir &lt;IHS数据目录&gt;</code>。{% endif %}</p>{% endif %}</div>
+<div class=panel><h2>符号 / 封装 / 3D 预览</h2>{{ P.cards(pv) }}</div>
 <div class=panel><h2>建议与复核</h2>
 <table><tr><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>状态</th><th>操作</th><th>证据</th></tr>
 {% for r in props %}<tr class="{{ 'new' if r.review_status in ('auto','approved') }}">
-<td>{{ r.field }}</td><td class=mute>{{ r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b>{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/symbol-files/{{ ev.sha256 }}" class=mute>下载 .kicad_sym（{{ ev.pin_count }} 脚，{{ ev.sources|join('+') }}）</a>{% endif %}{% if 'conflict' in ev %}<br><span class=diff>与其它来源引脚不一致：{% for x in ev.conflict %}{{ x.source }} {{ x.pin_count }} 脚{% if not loop.last %}，{% endif %}{% endfor %}</span>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
+<td>{{ r.field }}</td><td class=mute>{{ r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b>{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/preview?sym={{ ev.sha256 }}" target=_blank>预览</a> · <a href="/symbol-files/{{ ev.sha256 }}" class=mute>下载 .kicad_sym（{{ ev.pin_count }} 脚，{{ ev.sources|join('+') }}）</a>{% elif r.field=='footprint' %}<br><a href="/preview?fp={{ r.proposed|urlencode }}" target=_blank>预览</a>{% endif %}{% if 'conflict' in ev %}<br><span class=diff>与其它来源引脚不一致：{% for x in ev.conflict %}{{ x.source }} {{ x.pin_count }} 脚{% if not loop.last %}，{% endif %}{% endfor %}</span>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
 <td class="act-{{ r.action }}">{{ r.action }}</td><td class=mute>{{ r.method }}</td><td>{{ r.review_status }}{% if r.reviewed_by %}<br><span class=mute>{{ r.reviewed_by }} {{ r.reviewed_at|local }}</span>{% endif %}</td>
 <td style="white-space:nowrap">{% if r.review_status=='pending' %}<form class=inline method=post action="/review/{{ r.id }}/approve"><button class=ok>通过</button></form> <form class=inline method=post action="/review/{{ r.id }}/reject"><button class=bad>驳回</button></form>
 {% elif r.review_status=='auto' %}<form class=inline method=post action="/review/{{ r.id }}/revert"><button class=bad>撤销自动写入</button></form>{% endif %}</td>
 <td><details><summary class=mute>查看</summary><pre style="background:#f3f4f6;color:#111">{{ r.evidence_json }}</pre></details></td></tr>{% endfor %}</table>
 <h2>物料属性 / 备注</h2><pre style="background:#f3f4f6;color:#111">{{ p.attributes_json if p.attributes_json not in ('{}', '', None) else '（无属性；处理时会自动从 ezPLM 详情接口拉取）' }}
 {{ p.notes or '' }}</pre>
-{% endblock %}"""
+{% endblock %}{% block script %}{% if pv.footprint and pv.footprint.model %}{{ P.script() }}{% endif %}{% endblock %}"""
 
 REVIEW = """{% extends "base" %}{% block topright %}<a class=btn href="/review/groups">按组汇总复核 →</a>{% endblock %}{% block body %}
 <form class=filters method=get>
@@ -303,7 +304,7 @@ REVIEW = """{% extends "base" %}{% block topright %}<a class=btn href="/review/g
 <table><tr><th>型号</th><th>制造商</th><th>描述</th><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>操作</th></tr>
 {% for r,p in rows %}<tr>
 <td><a href="/parts/{{ p.id }}">{{ p.mpn }}</a></td><td class=mute>{{ p.manufacturer }}</td><td class=mute style="max-width:260px">{{ (p.description or '')[:80] }}</td>
-<td>{{ r.field }}</td><td class=mute>{{ r.current_label or r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b></td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
+<td>{{ r.field }}</td><td class=mute>{{ r.current_label or r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b>{% if r.field=='symbol' %}{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/preview?sym={{ ev.sha256 }}" target=_blank title="打开预览"><img src="/symbol-files/{{ ev.sha256 }}/preview.svg" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;background:#fff;margin-top:4px" onerror="this.remove()"></a>{% endif %}{% elif r.field=='footprint' and r.proposed %}<br><a href="/preview?fp={{ r.proposed|urlencode }}" target=_blank title="打开预览"><img src="/footprints/preview.svg?name={{ r.proposed|urlencode }}" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;margin-top:4px" onerror="this.remove()"></a>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
 <td class="act-{{ r.action }}">{{ r.action }}</td><td class=mute>{{ r.method }}</td>
 <td style="white-space:nowrap">{% if r.review_status=='pending' %}<form class=inline method=post action="/review/{{ r.id }}/approve?next={{ next|urlencode }}"><button class=ok>通过</button></form> <form class=inline method=post action="/review/{{ r.id }}/reject?next={{ next|urlencode }}"><button class=bad>驳回</button></form>
 {% elif r.review_status=='auto' %}<form class=inline method=post action="/review/{{ r.id }}/revert?next={{ next|urlencode }}"><button class=bad>撤销</button></form>{% else %}<span class=mute>{{ r.reviewed_by }}</span>{% endif %}</td>
@@ -467,8 +468,79 @@ SETTINGS = """{% extends "base" %}{% block body %}
 <tr><td>规则文件</td><td>config/rules.yaml（分类）、config/packages.yaml（封装映射）、config/manufacturers.yaml（URL 模板）——改完提交到 GitHub 重新部署即可生效</td></tr></table></div></div>
 {% endblock %}"""
 
+PREVIEW = """{% macro cards(pv) %}
+<style>.pv3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}@media(max-width:1000px){.pv3{grid-template-columns:1fr}}
+.pvc h3{font-size:13px;margin:0 0 6px;display:flex;align-items:center;gap:6px}.pvc h3 i{display:inline-block;width:14px;height:14px;border:1.5px solid #2f9e44;border-radius:3px}
+.pvbox{border:1px solid var(--line);border-radius:8px;height:300px;display:flex;align-items:center;justify-content:center;overflow:auto;background:#fff;padding:8px}
+.pvbox svg{max-height:280px;width:auto;max-width:100%}.pvbox.multi{flex-direction:column;justify-content:flex-start;gap:6px}.pvbox.multi svg{max-height:none}
+.pv3d{background:#d8ecf8;padding:0;position:relative}.pv3d canvas{width:100%;height:100%;display:block}.pvnote{position:absolute;color:var(--mute);font-size:12px;text-align:center;padding:10px}
+.pvmeta{font-size:12px;color:var(--mute);margin-top:4px;word-break:break-all}.pvt{max-height:260px;overflow:auto;margin-top:8px}.pvt table{font-size:12px}.pvt td,.pvt th{padding:3px 8px}</style>
+<div class=pv3>
+<div class=pvc><h3><i></i>元件符号</h3>
+{% if pv.symbol and pv.symbol.units %}<div class="pvbox {{ 'multi' if pv.symbol.units|length > 1 }}">{% for lab, svg in pv.symbol.units %}{% if lab %}<div class=mute style="font-size:12px">{{ lab }}</div>{% endif %}{{ svg|safe }}{% endfor %}</div>
+<div class=pvmeta>{{ pv.symbol.value or pv.symbol.name }} · {{ pv.symbol.n_pins }} 脚 · {{ pv.symbol.source }} · {{ pv.symbol.status }}</div>
+{% else %}<div class=pvbox><span class=mute>{% if pv.symbol and pv.symbol.missing %}{{ pv.symbol.missing }}（{{ pv.symbol.status }}）<br>没有符号文件，无法预览（ezPLM 自有符号）{% else %}暂无符号{% endif %}</span></div>{% endif %}</div>
+<div class=pvc><h3><i></i>PCB 封装图</h3>
+{% if pv.footprint and pv.footprint.svg %}<div class=pvbox>{{ pv.footprint.svg|safe }}</div>
+<div class=pvmeta>{{ pv.footprint.lib }}:{{ pv.footprint.name }} · {{ pv.footprint.n_pads }} 焊盘 · {{ pv.footprint.size }} · {{ pv.footprint.status }}</div>
+{% else %}<div class=pvbox><span class=mute>{% if pv.footprint and pv.footprint.missing %}{{ pv.footprint.missing }}（{{ pv.footprint.status }}）<br>KiCad 库里找不到这个封装文件，无法预览{% else %}暂无封装{% endif %}</span></div>{% endif %}</div>
+<div class=pvc><h3><i></i>3D 模型</h3>
+{% set m = pv.footprint.model if pv.footprint else None %}
+<div class="pvbox pv3d" {% if m %}data-model="/models3d/{{ m.rel }}" data-offset="{{ m.offset|join(',') }}" data-rotate="{{ m.rotate|join(',') }}" data-scale="{{ m.scale|join(',') }}"{% endif %}>
+<span class=pvnote>{{ '加载 3D 模型…' if m else '封装没有关联 KiCad 官方 3D 模型' }}</span></div>
+<div class=pvmeta>{{ m.rel if m else '' }}{% if m %} · 拖动旋转，滚轮缩放{% endif %}</div></div>
+</div>
+<div class=grid2 style="margin-top:6px">
+<div>{% if pv.symbol and pv.symbol.pins %}<details open><summary class=mute>符号引脚（{{ pv.symbol.pins|length }}）</summary><div class=pvt>{% set su = pv.symbol.pins|selectattr('unit')|list %}<table><tr>{% if su %}<th>单元</th>{% endif %}<th>引脚编号</th><th>引脚名称</th><th>电气类型</th></tr>
+{% for x in pv.symbol.pins %}<tr>{% if su %}<td>{{ x.unit }}</td>{% endif %}<td>{{ x.number }}</td><td>{{ x.name }}</td><td class=mute>{{ x.type }}{{ '（隐藏）' if x.hidden }}</td></tr>{% endfor %}</table></div></details>{% endif %}</div>
+<div>{% if pv.footprint and pv.footprint.pads %}<details><summary class=mute>封装焊盘（{{ pv.footprint.n_pads }}）</summary><div class=pvt><table><tr><th>焊盘</th><th>类型</th><th>形状</th><th>尺寸 mm</th><th>钻孔</th></tr>
+{% for x in pv.footprint.pads %}<tr><td>{{ x.number }}{% if x.count > 1 %} ×{{ x.count }}{% endif %}</td><td>{{ x.type }}</td><td class=mute>{{ x.shape }}</td><td>{{ x.size }}</td><td class=mute>{{ x.drill }}</td></tr>{% endfor %}</table></div></details>{% endif %}</div>
+</div>
+{% endmacro %}
+{% macro script() %}
+<script type=importmap>{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script src="https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/occt-import-js.js"></script>
+<script type=module>
+import * as THREE from "three"; import {OrbitControls} from "three/addons/controls/OrbitControls.js";
+for (const box of document.querySelectorAll(".pv3d[data-model]")) {
+  const note = box.querySelector(".pvnote");
+  try {
+    const [buf, occt] = await Promise.all([fetch(box.dataset.model).then(r => { if (!r.ok) throw new Error("模型下载失败 " + r.status); return r.arrayBuffer(); }),
+      occtimportjs({locateFile: f => "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/" + f})]);
+    const res = occt.ReadStepFile(new Uint8Array(buf), null);
+    if (!res.success || !res.meshes.length) throw new Error("STEP 解析失败");
+    const group = new THREE.Group();
+    for (const m of res.meshes) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(m.attributes.position.array, 3));
+      if (m.attributes.normal) g.setAttribute("normal", new THREE.Float32BufferAttribute(m.attributes.normal.array, 3)); else g.computeVertexNormals();
+      g.setIndex(new THREE.BufferAttribute(Uint32Array.from(m.index.array), 1));
+      const c = m.color ? new THREE.Color(m.color[0], m.color[1], m.color[2]) : new THREE.Color(0x888888);
+      group.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({color: c, metalness: 0.15, roughness: 0.55, side: THREE.DoubleSide})));
+    }
+    const num = s => (s || "0,0,0").split(",").map(Number);
+    const [ox, oy, oz] = num(box.dataset.offset), [rx, ry, rz] = num(box.dataset.rotate);
+    group.position.set(ox, oy, oz); group.rotation.set(-rx * Math.PI / 180, -ry * Math.PI / 180, -rz * Math.PI / 180);
+    const root = new THREE.Group(); root.add(group); root.rotation.x = -Math.PI / 2;      // KiCad Z 向上 → three.js Y 向上
+    const scene = new THREE.Scene(); scene.add(root);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 2.2)); const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(3, 6, 4); scene.add(dl);
+    const bb = new THREE.Box3().setFromObject(root), size = bb.getSize(new THREE.Vector3()).length() || 1, ctr = bb.getCenter(new THREE.Vector3());
+    const w = box.clientWidth, h = box.clientHeight;
+    const cam = new THREE.PerspectiveCamera(35, w / h, size / 100, size * 100);
+    cam.position.copy(ctr).add(new THREE.Vector3(0.9, 0.8, 1.1).multiplyScalar(size * 1.15));
+    const rd = new THREE.WebGLRenderer({antialias: true, alpha: true}); rd.setPixelRatio(devicePixelRatio); rd.setSize(w, h);
+    note.remove(); box.appendChild(rd.domElement);
+    const ctl = new OrbitControls(cam, rd.domElement); ctl.target.copy(ctr); ctl.update();
+    (function loop() { requestAnimationFrame(loop); rd.render(scene, cam); })();
+  } catch (e) { note.textContent = "3D 预览失败：" + e.message; }
+}
+</script>
+{% endmacro %}"""
+
+PREVIEWPAGE = """{% extends "base" %}{% import "preview" as P %}{% block body %}{{ P.cards(pv) }}{% endblock %}{% block script %}{% if pv.footprint and pv.footprint.model %}{{ P.script() }}{% endif %}{% endblock %}"""
+
 env = Environment(loader=DictLoader({"base": BASE, "home": HOME, "jobs": JOBS, "parts": PARTS, "part": PART, "review": REVIEW,
-                                     "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS, "ihsmap": IHSMAP, "reviewgroups": REVIEWGROUPS}), autoescape=True)
+                                     "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS, "ihsmap": IHSMAP, "reviewgroups": REVIEWGROUPS, "preview": PREVIEW, "previewpage": PREVIEWPAGE}), autoescape=True)
 env.globals["pct"] = lambda a, b: round(100.0 * (a or 0) / b, 1) if b else 0
 from .tz import LABEL as _TZ_LABEL, to_local as _to_local
 env.filters["local"] = _to_local                  # 数据库里的 UTC 时间 → 北京时间显示
@@ -754,7 +826,7 @@ def part(request: Request, pid: str, user: str = Depends(auth)):
         from . import ihs_params as IP
         pnames = {t["key"]: t["name"] for t in IP.targets(db, pparams[0].category_id)}
     return render("part", request, title=p.mpn, nav="parts", user=user, p=p, props=props, tax=tax, leaves=tax.leaf_labels(),
-                  ihs=reference_rows(db, p, tax), ihs_n=IhsMatcher.n_ref(db), pparams=pparams, pnames=pnames)
+                  ihs=reference_rows(db, p, tax), ihs_n=IhsMatcher.n_ref(db), pparams=pparams, pnames=pnames, pv=previews.for_part(db, p, props))
 
 
 @app.post("/parts/{pid}/edit")
@@ -1282,6 +1354,50 @@ def settings_test_llm(user: str = Depends(auth)):
 @app.get("/api/summary")
 def api_summary(user: str = Depends(auth)):
     return json.loads(json.dumps(pipeline.summary(), default=str))
+
+
+@app.get("/symbol-files/{sha256}/preview.svg")
+def symbol_file_svg(sha256: str, user: str = Depends(auth)):
+    """复核列表里的符号缩略图。"""
+    from .symsets import file_content
+    from .symrender import load, render_svg
+    got = file_content(get_session(), sha256)
+    sym = load(got[1].decode("utf-8", "ignore")) if got else None
+    if not sym:
+        raise HTTPException(404)
+    return HTMLResponse(render_svg(sym), media_type="image/svg+xml", headers={"Cache-Control": "private, max-age=86400"})
+
+
+@app.get("/footprints/preview.svg")
+def footprint_svg(name: str, user: str = Depends(auth)):
+    pv = previews.footprint_preview(name)
+    if not pv:
+        raise HTTPException(404)
+    return HTMLResponse(pv["svg"], media_type="image/svg+xml", headers={"Cache-Control": "private, max-age=86400"})
+
+
+@app.get("/models3d/{rel:path}")
+def model3d(rel: str, user: str = Depends(auth)):
+    """KiCad 官方 3D 模型（STEP），首次从 GitLab 取并缓存到 DATA_DIR/cache/3d。"""
+    data = previews.model_bytes(rel)
+    if not data:
+        raise HTTPException(404)
+    return HTMLResponse(data, media_type="application/octet-stream", headers={"Cache-Control": "private, max-age=604800"})
+
+
+@app.get("/preview", response_class=HTMLResponse)
+def preview_page(request: Request, sym: str = "", symname: str = "", fp: str = "", user: str = Depends(auth)):
+    """单独的预览页（复核列表、冲突候选用）：sym=符号文件 SHA，或 symname=KiCad 符号名；fp=封装名。"""
+    db = get_session()
+    pv = {"symbol": None, "footprint": None}
+    if sym:
+        pv["symbol"] = previews.symbol_by_sha(db, sym)
+    elif symname:
+        pv["symbol"] = previews.symbol_by_name(symname) or {"missing": symname, "status": "符号名"}
+    if fp:
+        pv["footprint"] = previews.footprint_preview(fp) or {"missing": fp, "status": "封装名"}
+    title = " / ".join(x for x in ((pv["symbol"] or {}).get("name") or symname, fp) if x) or "预览"
+    return render("previewpage", request, title=title, nav="review", user=user, pv=pv)
 
 
 @app.get("/symbol-files/{sha256}")
