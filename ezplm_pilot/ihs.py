@@ -512,8 +512,9 @@ class IhsMatcher:
                 props.append(Proposal(p.id, p.mpn, "description_en", "", r.description, r.description, conf, act, method, ev,
                                       ["英文描述自动补全" if act == "auto_fill" else "英文描述待复核"]))
             if not p.manufacturer and level == "L4" and conf >= 0.7:
-                # ihs_ref 里的 mfr_current 是本地导入时按 YAML 规范名算的（"Diodes Inc"）；出建议时再落到 ezPLM 厂商表的名字（"Diodes Incorporated"）
-                name = self.lineage.canonical(r.mfr_current)
+                # ihs_ref 里的 mfr_current 是本地导入时算的（谱系可能已更新、名字是 YAML 规范名 "Diodes Inc"）：
+                # 出建议时按当前谱系重算，并落到 ezPLM 厂商表的名字（BCD → "Diodes Incorporated"）
+                name = self.lineage.resolve(r.mfr_ihs, r.family, r.mpn)["current"]
                 props.append(Proposal(p.id, p.mpn, "manufacturer", "", name, name, conf, "review", method, ev, ["厂商待复核"]))
             if not p.footprint and self.pkg:
                 txt = f"{r.package} {r.description} {p.description}"
