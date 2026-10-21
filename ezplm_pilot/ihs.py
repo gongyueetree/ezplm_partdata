@@ -89,7 +89,7 @@ class Lineage:
             k = mfr_key(e["from"])
             if k in self.entries:            # 同一厂商可能先手写（带 match）再由映射表生成，取第一条
                 continue
-            e = dict(e, key=k, rules=[(re.compile(r["families"]), r["to"]) for r in e.get("rules", [])],
+            e = dict(e, key=k, rules=[(re.compile(r["families"]), r["to"], re.compile(r["mpn"], re.I) if r.get("mpn") else None) for r in e.get("rules", [])],
                      default_re=re.compile(e["default_families"]) if e.get("default_families") else None)
             self.entries[k] = e
             if e.get("match"):
@@ -119,17 +119,18 @@ class Lineage:
                 return e
         return None
 
-    def resolve(self, name: str, family: str = "") -> dict:
+    def resolve(self, name: str, family: str = "", mpn: str = "") -> dict:
         """→ {current, conf, note, origin}。current 为规范化后的当前归属；conf 为空表示未被并购。
         origin 是"出厂时的厂商"比较键：两条记录 origin 相同说明原厂商就是同一家（L1/L2），不同但 current 相同说明经谱系对上（L3）。"""
-        ck = (name, family)
+        ck = (name, family, mpn)
         if ck in self._cache:
             return self._cache[ck]
         e = self.entry(name)
         if e:
             to = e["to"]
-            for pat, t in e["rules"]:
-                if family and pat.search(family):
+            for pat, t, mpn_re in e["rules"]:
+                # 规则可再限定型号（AMD 只有 Am29/S29 等 Flash 去了 Spansion→Infineon；Xilinx 的存储模块现在就是 AMD）
+                if family and pat.search(family) and (mpn_re is None or (mpn and mpn_re.search(mpn))):
                     to = t
                     break
             else:
@@ -252,7 +253,7 @@ def load(ihs_dir: str | Path, families: str = "", workers: int | None = None, st
         for i, rows in enumerate(pool.imap(_parse_file, files[start - 1:]), start - 1):   # imap 保持文件顺序 → 增量按日期覆盖
             rows = list({r["objid"]: r for r in rows}.values())       # 同一文件里 Objectid 会重复出现（如 SENSOR），只留最后一条
             for r in rows:
-                res = lin.resolve(r["mfr_ihs"], r["family"])
+                res = lin.resolve(r["mfr_ihs"], r["family"], r["mpn"])
                 r["mfr_current"], r["lineage_conf"] = res["current"], res["conf"]
             for j in range(0, len(rows), 1000):
                 write(rows[j:j + 1000])
@@ -462,15 +463,15 @@ class IhsMatcher:
             return []
         out = []
         fam = family_hint(self._root(p))
-        mine = self.lineage.resolve(p.manufacturer, fam) if p.manufacturer else None
-        currents = {mfr_key(self.lineage.resolve(r.mfr_ihs, r.family)["current"]) for r in rows}
+        mine = self.lineage.resolve(p.manufacturer, fam, p.mpn) if p.manufacturer else None
+        currents = {mfr_key(self.lineage.resolve(r.mfr_ihs, r.family, r.mpn)["current"]) for r in rows}
         for r in rows:
             exact = (r.mpn or "").strip().upper() == (p.mpn or "").strip().upper()
             if not mine:
                 level, conf = "L4", (0.70 if len(currents) == 1 else 0.45)
-            elif mfr_key(self.lineage.resolve(r.mfr_ihs, r.family)["current"]) != mfr_key(mine["current"]):
+            elif mfr_key(self.lineage.resolve(r.mfr_ihs, r.family, r.mpn)["current"]) != mfr_key(mine["current"]):
                 level, conf = "L5", 0.30
-            elif self.lineage.resolve(r.mfr_ihs, r.family)["origin"] == mine["origin"]:
+            elif self.lineage.resolve(r.mfr_ihs, r.family, r.mpn)["origin"] == mine["origin"]:
                 level, conf = ("L1", 0.97) if exact else ("L2", 0.93)
             else:
                 level, conf = "L3", LINEAGE_FACTOR.get(r.lineage_conf or mine["conf"] or "A", 0.8)
@@ -488,7 +489,7 @@ class IhsMatcher:
         for p in parts:
             # 旧厂商名提示（不依赖 IHS 记录）：ezPLM 里写的是已被并购的厂商
             if p.manufacturer:
-                res = self.lineage.resolve(p.manufacturer, family_hint(self._root(p)))
+                res = self.lineage.resolve(p.manufacturer, family_hint(self._root(p)), p.mpn)
                 if res["conf"] in ("A", "B"):                # C 级（如 Motorola：逻辑/分立→onsemi、MCU→NXP）只凭厂商名判断不了，不出建议
                     conf = {"A": 0.95, "B": 0.75, "C": 0.6}.get(res["conf"], 0.6)
                     props.append(Proposal(p.id, p.mpn, "manufacturer", p.manufacturer, res["current"], res["current"], conf, "flag_mismatch",
@@ -538,5 +539,5 @@ def reference_rows(db, part, tax=None) -> dict:
         except ValueError:
             params = {}
         out.append({"r": r, "level": LEVEL_LABEL[level], "lv": level, "conf": conf, "params": params})
-    mine = m.lineage.resolve(part.manufacturer, family_hint(m._root(p))) if part.manufacturer else None
+    mine = m.lineage.resolve(part.manufacturer, family_hint(m._root(p)), part.mpn) if part.manufacturer else None
     return {"rows": out[:20], "total": len(out), "mine": mine}

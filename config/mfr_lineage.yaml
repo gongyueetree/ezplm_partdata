@@ -88,7 +88,7 @@ lineage:
   - {from: "QIMONDA AG", to: "Qimonda (已破产)", conf: C, note: "2009 破产，无继承者；保留原名，标记停产"}
   - {from: "THOMAS & BETTS CORP", to: "ABB", conf: A, note: "2012 ABB收购"}
   - {from: "SEIKO INSTRUMENTS USA INC", to: "ABLIC", conf: A, note: "2016 半导体分拆为ABLIC(现属MinebeaMitsumi)"}
-  - {from: "ADVANCED MICRO DEVICES INC", to: "AMD", conf: B, rules: [{families: "MEMORY_IC", to: "Infineon Technologies"}], note: "2003 Flash分拆为Spansion；Flash→Infineon(Spansion)；其余→AMD"}
+  - {from: "ADVANCED MICRO DEVICES INC", to: "AMD", conf: B, rules: [{families: "MEMORY_IC", mpn: "^(AM2[789]|AM4[19]|AM70|S2[59]|S7[0-9]|S29)", to: "Infineon Technologies"}], note: "2003 Flash分拆为Spansion；Flash→Infineon(Spansion)；其余→AMD"}
   - {from: "MONOLITHIC MEMORIES", to: "AMD", conf: C, note: "1987 AMD收购；PAL→Lattice(Vantis)"}
   - {from: "XILINX INC", to: "AMD", conf: A, note: "2022 AMD收购"}
   - {from: "ARTESYN TECHNOLOGIES INC", to: "Advanced Energy", conf: A, note: "Emerson→Artesyn→2019 Advanced Energy"}
