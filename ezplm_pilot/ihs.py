@@ -512,7 +512,9 @@ class IhsMatcher:
                 props.append(Proposal(p.id, p.mpn, "description_en", "", r.description, r.description, conf, act, method, ev,
                                       ["英文描述自动补全" if act == "auto_fill" else "英文描述待复核"]))
             if not p.manufacturer and level == "L4" and conf >= 0.7:
-                props.append(Proposal(p.id, p.mpn, "manufacturer", "", r.mfr_current, r.mfr_current, conf, "review", method, ev, ["厂商待复核"]))
+                # ihs_ref 里的 mfr_current 是本地导入时按 YAML 规范名算的（"Diodes Inc"）；出建议时再落到 ezPLM 厂商表的名字（"Diodes Incorporated"）
+                name = self.lineage.canonical(r.mfr_current)
+                props.append(Proposal(p.id, p.mpn, "manufacturer", "", name, name, conf, "review", method, ev, ["厂商待复核"]))
             if not p.footprint and self.pkg:
                 txt = f"{r.package} {r.description} {p.description}"
                 pk = find_package(f"{r.package} {r.description}")            # "SOT-23, 5 PIN" → SOT-23-5
