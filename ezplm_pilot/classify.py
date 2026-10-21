@@ -337,6 +337,10 @@ class Classifier:
         if not score:
             return None
         best = max(score, key=score.get)
+        rules = [c for c in cands if c.method.startswith("rule") and c.category_id]
+        if rules and not any(c.category_id == best for c in rules):
+            # 规则和近邻打架时听规则（近邻会被同厂商相似型号带偏，如罗姆"肖特基二极管"→通用二极管）；置信度按分歧折减，进复核
+            best = max(rules, key=lambda c: c.conf).category_id
         agreeing = [c for c in cands if c.category_id == best]
         conf = max(c.conf for c in agreeing)
         if len(agreeing) >= 2:                      # 多层一致 → 加成

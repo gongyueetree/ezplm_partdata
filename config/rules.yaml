@@ -42,6 +42,8 @@ keyword:
   # 射频放大器（Qorvo QPA/SGL 这类"硅锗异质结双极晶体管放大器"MMIC）不是分立 BJT；要有频率/射频字样，"NPN 通用放大器"不算
   - {pattern: "(\\d\\s*[MG]Hz|射频|微波|RF).{0,40}放大器|低噪声放大器|(?<![A-Za-z])(LNA|MMIC)(?![A-Za-z])|增益模块|Gain Block", exclude: "运算放大器|运放|音频|仪表放大|差分放大器|功率放大器模块", category: "射频和无线 > 射频放大器", conf: 0.85}
   - {pattern: "(双|多芯片|Dual).{0,6}(NPN|PNP)|(NPN|PNP).{0,10}(多芯片|阵列|Array)|(NPN|PNP) ?\\+ ?(NPN|PNP)", exclude: "预偏置|偏置电阻|带电阻|内置电阻|数字晶体管", category: "双极晶体管阵列", conf: 0.85, desc_only: true}
+  # 只写"开关晶体管/小信号晶体管"不写 NPN/PNP 的（罗姆 UMT3904、SST3906、2SA2094）；MOS/数字(带电阻)晶体管/IGBT/光电除外
+  - {pattern: "(开关|小信号|中功率|大功率|功率|高频|低频|通用|高压|低饱和)晶体管|达林顿", exclude: "MOS|FET|场效应|预偏置|数字晶体管|内置电阻|带电阻|IGBT|光电|光敏|阵列|双|复合", category: "单双极晶体管", conf: 0.85, desc_only: true}
   # NPN/PNP 只看描述（型号 PNP3806 之类不是晶体管），且要有边界
   - {pattern: "(?<![A-Za-z])(NPN|PNP|BJT)(?![A-Za-z])|双极晶体管", exclude: "预偏置|偏置电阻|带电阻|内置电阻|数字晶体管|阵列|多芯片|双 ?NPN|双 ?PNP|(NPN|PNP) ?\\+ ?(NPN|PNP)|调节器|稳压器|Regulator|Dual|Array|MHz|GHz|射频|微波|异质结|MMIC|放大器模块", category: "单双极晶体管", conf: 0.8, desc_only: true}
   # LDO：ezPLM 没有单独的"线性稳压器"分类，先归"线性稳压器控制器"（用户确认）。
@@ -119,6 +121,7 @@ mpn:
   # Skyworks（原 Silicon Labs 时钟产品线）：Si533xx（5 位）是时钟缓冲器；Si53xx/Si52xxx 是时钟发生器/抖动衰减器（描述常为空，近邻会猜成射频前端）
   - {manufacturer: "Skyworks|Silicon Lab|芯科", pattern: "^SI533\\d{2}", category: "时钟缓冲器，驱动器，分配器", conf: 0.9}
   - {manufacturer: "Skyworks|Silicon Lab|芯科", pattern: "^SI53\\d{2}(?!\\d)|^SI52\\d{3}", category: "时钟发生器，PLL，频率合成器", conf: 0.9}
+  - {manufacturer: "ROHM|罗姆", pattern: "^DA[NP]2\\d\\d", category: "整流器 > 二极管阵列", conf: 0.9}   # 罗姆 DAN202/DAP202：双开关二极管（共阴/共阳）
   - {pattern: "^(LTC1044|ICL766[02]|MAX1044|MAX66[0-5]|TC766[02]|TC962|LT1054|LM266[0-3]|LM828|LM2766)", category: "电源管理（PMIC） > 电荷泵", conf: 0.9}   # 经典电压反相/倍压电荷泵（描述常为空）
   - {manufacturer: "onsemi|ON Semi", pattern: "^NSB[AC]\\d{3}\\w*D(XV6|P6)", category: "双极晶体管阵列，预偏置", conf: 0.85}   # 双路带电阻晶体管
   - {manufacturer: "Infineon", pattern: "^(AU)?IRF", category: "单 FET，MOSFET", conf: 0.93}
