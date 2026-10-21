@@ -63,6 +63,7 @@ class RuleEngine:
                     for r in cfg.get("mpn", [])]
         self.symbol_lib = cfg.get("symbol_lib", {})
         self.no_flag = [(re.compile(r["current"]), re.compile(r["proposed"])) for r in cfg.get("no_flag", [])]
+        self.hold = [(re.compile(r["pattern"], re.I), r["tag"]) for r in cfg.get("hold", [])]
         self.unresolved = [r["category"] for r in cfg.get("keyword", []) + cfg.get("mpn", []) if self._resolve(r["category"]) is None]
 
     def _resolve(self, name: str) -> str | None:
@@ -356,6 +357,10 @@ class Classifier:
         return [self.classify(p, _knn=kv, _knn_done=True) for p, kv in zip(parts, knn)]
 
     def classify(self, p: Part, _knn=None, _knn_done: bool = False) -> Proposal:
+        desc = f"{p.description} {p.description_en}"
+        for pat, tag in self.rules.hold:                   # 分类树里还没有合适分类的器件：不猜，只打标签
+            if not p.category_id and pat.search(desc):
+                return Proposal(p.id, p.mpn, "category_id", "", "", "", 0.0, "skip", "hold", {"hold": tag}, ["待分类", tag])
         cands = self.rules.apply(p)
         kv = _knn if _knn_done else self.knn.vote(p)
         if kv:

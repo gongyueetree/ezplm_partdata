@@ -5,6 +5,11 @@
 # 规则按顺序匹配，先命中者优先；conf 为该规则的置信度。
 # no_flag：原分类 → 建议分类 匹配这些（正则，对完整路径）时，不判"疑似错误"。
 # 多是"从更细的分类挪到更笼统的分类"：规则只认通用关键词，不知道原分类已经更具体。
+# hold：命中的物料不出分类建议，只打标签（ezPLM 分类树里还没有合适的叶子分类，近邻只会乱猜）
+hold:
+  # 隔离电源模块（金升阳 URB/WRB/H…、致远、恒率；"输出功率 … 转换效率" 或 "转换类型：AC-DC/DC-DC"）
+  - {pattern: "输出功率[:：].{0,40}转换效率|转换类型[:：] ?(AC|DC)-DC|电源模块|隔离电源", tag: "电源模块（缺分类）"}
+
 no_flag:
   - {current: "预偏置", proposed: "单双极晶体管"}
   - {current: "阵列", proposed: "单二极管|单 FET|单双极晶体管|单 IGBT"}
@@ -56,6 +61,8 @@ keyword:
   - {pattern: "(DC[/-]?DC|降压|升压|Buck|Boost).{0,12}(控制器|Controller)", exclude: "通孔型|表面贴装型|电荷泵|平滑|\\d+ ?小时|充电(?!泵)|功放|音频|Audio|MOSFET ?驱动|MOSFET Driver|电容|Capacitor|沟槽|Trench|MOS技术|[μµu]Module|LED|模块|机箱安装|板安装|[Bb]rick|砖", category: "DC-DC 开关控制器", conf: 0.85}
   - {pattern: "DC[/-]?DC.*(转换器|稳压|开关)|降压|升压|Buck|Boost", exclude: "通孔型|表面贴装型|电荷泵|充电泵|Charge Pump|平滑|\\d+ ?小时|充电(?!泵)|功放|音频|Audio|MOSFET ?驱动|MOSFET Driver|电容|Capacitor|沟槽|Trench|MOS技术|[μµu]Module|LED|控制器|Controller|模块|机箱安装|板安装|[Bb]rick|砖", category: "稳压器 - DC-DC 开关稳压器", conf: 0.85}
   - {pattern: "电压基准|基准电压", category: "电压基准", conf: 0.9}
+  # 串联电压基准的参数模板（"输出类型：固定 … 输出电流：5mA 精度：±0.5%"，LM4120/AD1585/MAX6068），LDO 模板带"输出极性/压降/PSRR"
+  - {pattern: "精度[:：] ?±\\s*\\d", exclude: "输出极性|压降|PSRR|纹波|拓扑|输出功率|转换效率|电流检测|温度", category: "电压基准", conf: 0.85}
   # 电压检测/复位芯片（APX803、TPS38x、MAX809 一类）：近邻常把它们猜成电压基准
   - {pattern: "电压检测器|电压监测器|电压监控器|复位芯片|复位IC|复位电路|上电复位|微处理器监控|看门狗|Supervisor|Voltage Detector|Reset IC|Watchdog", exclude: "电流|电池管理|电量|温度", category: "电源管理（PMIC） > 电源监控器", conf: 0.88}
   - {pattern: "运算放大器|运放|仪表放大器|Op ?Amp", category: "仪器，运算放大器，缓冲器", conf: 0.85}
@@ -109,6 +116,7 @@ mpn:
   - {manufacturer: "Infineon", pattern: "^CY8C", category: "微控制器（MCU）", conf: 0.95}
   - {manufacturer: "天微|Titan|^TM|中微爱芯|i-?Core", pattern: "^(TM|AIP)16\\d\\d", category: "电源管理（PMIC） > 显示驱动器", conf: 0.85}   # TM1617/1629/1651、AiP1629 数码管驱动
   - {manufacturer: "晶丰明源|Bright ?Power|BPS", pattern: "^BP(23|99)\\d\\d", category: "电源管理（PMIC） > LED 驱动器", conf: 0.92}   # BP2329/BP9911 等描述只写"拓扑结构：降压"
+  - {pattern: "^(LTC1044|ICL766[02]|MAX1044|MAX66[0-5]|TC766[02]|TC962|LT1054|LM266[0-3]|LM828|LM2766)", category: "电源管理（PMIC） > 电荷泵", conf: 0.9}   # 经典电压反相/倍压电荷泵（描述常为空）
   - {manufacturer: "onsemi|ON Semi", pattern: "^NSB[AC]\\d{3}\\w*D(XV6|P6)", category: "双极晶体管阵列，预偏置", conf: 0.85}   # 双路带电阻晶体管
   - {manufacturer: "Infineon", pattern: "^(AU)?IRF", category: "单 FET，MOSFET", conf: 0.93}
   - {manufacturer: "Diodes", pattern: "^DM[NP]\\d.*DB", category: "FET、MOSFET 阵列", conf: 0.85}
