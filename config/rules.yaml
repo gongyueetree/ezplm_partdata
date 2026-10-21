@@ -116,6 +116,9 @@ mpn:
   - {manufacturer: "Infineon", pattern: "^CY8C", category: "微控制器（MCU）", conf: 0.95}
   - {manufacturer: "天微|Titan|^TM|中微爱芯|i-?Core", pattern: "^(TM|AIP)16\\d\\d", category: "电源管理（PMIC） > 显示驱动器", conf: 0.85}   # TM1617/1629/1651、AiP1629 数码管驱动
   - {manufacturer: "晶丰明源|Bright ?Power|BPS", pattern: "^BP(23|99)\\d\\d", category: "电源管理（PMIC） > LED 驱动器", conf: 0.92}   # BP2329/BP9911 等描述只写"拓扑结构：降压"
+  # Skyworks（原 Silicon Labs 时钟产品线）：Si533xx（5 位）是时钟缓冲器；Si53xx/Si52xxx 是时钟发生器/抖动衰减器（描述常为空，近邻会猜成射频前端）
+  - {manufacturer: "Skyworks|Silicon Lab|芯科", pattern: "^SI533\\d{2}", category: "时钟缓冲器，驱动器，分配器", conf: 0.9}
+  - {manufacturer: "Skyworks|Silicon Lab|芯科", pattern: "^SI53\\d{2}(?!\\d)|^SI52\\d{3}", category: "时钟发生器，PLL，频率合成器", conf: 0.9}
   - {pattern: "^(LTC1044|ICL766[02]|MAX1044|MAX66[0-5]|TC766[02]|TC962|LT1054|LM266[0-3]|LM828|LM2766)", category: "电源管理（PMIC） > 电荷泵", conf: 0.9}   # 经典电压反相/倍压电荷泵（描述常为空）
   - {manufacturer: "onsemi|ON Semi", pattern: "^NSB[AC]\\d{3}\\w*D(XV6|P6)", category: "双极晶体管阵列，预偏置", conf: 0.85}   # 双路带电阻晶体管
   - {manufacturer: "Infineon", pattern: "^(AU)?IRF", category: "单 FET，MOSFET", conf: 0.93}
