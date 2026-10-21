@@ -137,7 +137,9 @@ lineage:
   - {from: "SIMTEK CORP", to: "Infineon Technologies", conf: A, note: "2008 Cypress→Infineon"}
   - {from: "SPANSION INC", to: "Infineon Technologies", conf: A, note: "2015 Cypress→2020 Infineon"}
   - {from: "SPANSION LLC", to: "Infineon Technologies", conf: A, note: "2015 Cypress→2020 Infineon"}
-  - {from: "INTEL CORP", to: "Intel", conf: C, note: "按类别判断；NOR Flash→Micron；NAND→Solidigm(SK hynix)"}
+  # Intel 闪存：NOR（28F/StrataFlash、25F 串行）2008 年给 Numonyx → 2010 Micron；其余保持 Intel
+  - {from: "INTEL CORP", to: "Intel", conf: C, rules: [{mpn: "^[A-Z]{0,2}28F|^[A-Z]{0,2}25F|^S33", to: "Micron Technology", conf: B}],
+     note: "按型号：28F/25F 等 NOR Flash→Micron(经 Numonyx)；NAND→Solidigm(SK hynix)；其余需逐条判断"}
   - {from: "KYOCERA KINSEKI CORP", to: "KYOCERA", conf: A, note: "Kyocera集团"}
   - {from: "AVX CORP", to: "KYOCERA AVX", conf: A, note: "2020 Kyocera全资"}
   - {from: "SYFER TECHNOLOGY LTD", to: "Knowles", conf: A, note: "2012 Knowles(Dover)收购"}
