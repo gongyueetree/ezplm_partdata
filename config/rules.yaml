@@ -56,7 +56,7 @@ keyword:
   - {pattern: "电压基准|基准电压", category: "电压基准", conf: 0.9}
   - {pattern: "运算放大器|运放|仪表放大器|Op ?Amp", category: "仪器，运算放大器，缓冲器", conf: 0.85}
   - {pattern: "比较器", category: "线性 > 比较器", conf: 0.8}
-  - {pattern: "模数转换器|\\bADC\\b", category: "模数转换器（ADC）", conf: 0.85}
+  - {pattern: "模数转换器|模/数.{0,8}转换器|A/D\\)? ?转换器|\\bADC\\b", category: "模数转换器（ADC）", conf: 0.85}
   - {pattern: "数模转换器|\\bDAC\\b", category: "数模转换器（DAC）", conf: 0.85}
   # 时钟缓冲/扇出/分配归"时钟缓冲器，驱动器，分配器"；带 PLL 的石英/TCXO 振荡器归有源晶振（都要排在 PLL 规则前面，先命中的生效）
   - {pattern: "时钟缓冲|扇出缓冲|扇出驱动|时钟分配|时钟驱动器|Clock (Buffer|Driver|Distribution)|Fan-?out Buffer", exclude: "零延迟|Zero.?Delay", category: "时钟缓冲器，驱动器，分配器", conf: 0.88}
@@ -78,7 +78,11 @@ keyword:
   - {pattern: "陀螺仪", category: "陀螺仪", conf: 0.9}
   - {pattern: "\\bIMU\\b|惯性测量", category: "IMU（惯性测量装置）", conf: 0.9}
   - {pattern: "电机驱动|步进.*驱动|无刷.*驱动", category: "电机驱动器，控制器", conf: 0.85}
-  - {pattern: "电源开关|负载开关|配电开关|eFuse", category: "电源开关，配电开关，负载驱动器", conf: 0.85}
+  # 负载开关组里混进来的：分立 MOS 管（"沟槽MOSFET技术…适用于负载开关"）、模拟开关（单刀双掷）、离线反激电源开关（AC-DC）、带电源开关的 ADC、MCU
+  - {pattern: "沟槽.{0,6}(MOSFET|MOS)|沟槽技术|(高密|密度)(电池|单元)设计", exclude: "肖特基|二极管|Schottky|IGBT|驱动器", category: "单 FET，MOSFET", conf: 0.85, desc_only: true}
+  - {pattern: "单刀|双掷|SPDT|SPST|模拟开关", exclude: "负载开关", category: "接口 > 模拟开关，多路复用器，解复用器", conf: 0.85}
+  - {pattern: "离线|反激|原边|初级侧|Offline|Flyback", exclude: "LED|语音|识别", category: "AC DC 转换器，离线开关", conf: 0.85}
+  - {pattern: "电源开关|负载开关|配电开关|eFuse|电子保险丝|电子熔丝", exclude: "沟槽|Trench|栅极电荷|单元设计|电池设计|MOSFET技术|单刀|双掷|SPDT|SPST|离线|反激|原边|初级侧|转换器芯片|模/数|ADC|CPU|内核|主频", category: "电源开关，配电开关，负载驱动器", conf: 0.85}
   - {pattern: "固定电感|功率电感|贴片电感", category: "固定电感器", conf: 0.85}
   # 排除稳压器描述里常见的 "针对使用陶瓷电容的操作进行优化 / 可提供 300mA 连续电流"
   - {pattern: "多层陶瓷电容|MLCC|陶瓷电容", exclude: "稳压|LDO|低压差|调节器|输出电压|输出电流|连续电流", category: "陶瓷电容器", conf: 0.9}
@@ -88,7 +92,7 @@ keyword:
   - {pattern: "晶体谐振器|无源晶振|石英晶体", category: "晶体（无源晶振）", conf: 0.9}
   - {pattern: "排针", category: "排针", conf: 0.9}
   - {pattern: "排母", category: "排母", conf: 0.9}
-  - {pattern: "Type-?C|USB 连接器|USB连接器", category: "USB连接器", conf: 0.9}
+  - {pattern: "Type-?C|USB 连接器|USB连接器", exclude: "开关|芯片|控制器|保护|供电|充电|PD|端口控制|DFP|UFP|转换器|驱动", category: "USB连接器", conf: 0.9}   # 芯片描述里的 "USB Type-C 供电应用" 不算连接器
 
 mpn:
   - {manufacturer: "STMicro", pattern: "^STM32", category: "微控制器（MCU）", conf: 0.97}
