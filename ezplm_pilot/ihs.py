@@ -89,7 +89,8 @@ class Lineage:
             k = mfr_key(e["from"])
             if k in self.entries:            # 同一厂商可能先手写（带 match）再由映射表生成，取第一条
                 continue
-            e = dict(e, key=k, rules=[(re.compile(r["families"]), r["to"], re.compile(r["mpn"], re.I) if r.get("mpn") else None) for r in e.get("rules", [])],
+            e = dict(e, key=k, rules=[(re.compile(r.get("families") or ".*"), r["to"], re.compile(r["mpn"], re.I) if r.get("mpn") else None, r.get("conf"))
+                                      for r in e.get("rules", [])],
                      default_re=re.compile(e["default_families"]) if e.get("default_families") else None)
             self.entries[k] = e
             if e.get("match"):
@@ -127,11 +128,13 @@ class Lineage:
             return self._cache[ck]
         e = self.entry(name)
         if e:
-            to = e["to"]
-            for pat, t, mpn_re in e["rules"]:
-                # 规则可再限定型号（AMD 只有 Am29/S29 等 Flash 去了 Spansion→Infineon；Xilinx 的存储模块现在就是 AMD）
-                if family and pat.search(family) and (mpn_re is None or (mpn and mpn_re.search(mpn))):
-                    to = t
+            to, rconf = e["to"], None
+            for pat, t, mpn_re, rc in e["rules"]:
+                # 规则可再限定型号（AMD 只有 Am29/S29 等 Flash 去了 Spansion→Infineon；Xilinx 的存储模块现在就是 AMD）；
+                # 只按型号的规则（不写 families）分类不明时也适用（Motorola：MC74/MC14/1N… → onsemi，MC68/MPC/MPX… → NXP）
+                fam_ok = pat.search(family) if family else pat.pattern == ".*"
+                if fam_ok and (mpn_re is None or (mpn and mpn_re.search(mpn))):
+                    to, rconf = t, rc
                     break
             else:
                 # 公司只卖掉了部分业务（如西门子：无源→TDK、半导体→Infineon，自动化产品仍是西门子）：
@@ -139,7 +142,7 @@ class Lineage:
                 if e["default_re"] is not None and not (family and e["default_re"].search(family)):
                     to = name
             cur = self.canonical(to)
-            out = {"current": cur, "conf": e.get("conf", ""), "note": e.get("note", ""), "origin": e["key"]}
+            out = {"current": cur, "conf": rconf or e.get("conf", ""), "note": e.get("note", ""), "origin": e["key"]}
             if mfr_key(cur) == mfr_key(self.canonical(name)):        # 映射到自己（如 TE CONNECTIVITY LTD）= 未变更
                 out.update(conf="", note="")
         else:

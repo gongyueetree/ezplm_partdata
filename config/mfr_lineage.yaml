@@ -187,7 +187,12 @@ lineage:
   - {from: "PEREGRINE SEMICONDUCTOR CORP", to: "Murata (pSemi)", conf: A, note: "2014 Murata收购"}
   - {from: "C&D TECHNOLOGIES INC", to: "Murata Power Solutions", conf: C, note: "需核实；电源模块→Murata"}
   - {from: "FREESCALE SEMICONDUCTOR INC", to: "NXP Semiconductors", conf: A, note: "2015 NXP收购"}
-  - {from: "MOTOROLA INC", to: "NXP Semiconductors", conf: C, note: "需按物料逐条判断；标准逻辑/分立/模拟→onsemi(1999)；MCU/DSP/RF→NXP"}
+  # Motorola 半导体 1999 年分立/标准逻辑/通用模拟分给 ON Semiconductor（onsemi），2004 年其余（MCU/MPU/DSP/传感器/射频功率）成为 Freescale → 2015 NXP。
+  # 按型号前缀判断；都不像的保持 C 级（不凭厂商名出建议）。MC33/MC34 两边都有，不判。
+  - {from: "MOTOROLA INC", to: "NXP Semiconductors", conf: C, rules: [
+      {mpn: "^(MC74|MC14[0-9]{3}|MC10|MC100|MC78|MC79|MC14[0-9]{2}[A-Z]|MC1[45]8[0-9]|MC3486|MC3487|SN74(LS|F|ALS|HC)|74(LS|F|HC|AC)|1N[0-9]|2N[0-9]|MMBT|MMBD|MMBZ|MMBF|MMSZ|MJ[DEFHW]?[0-9]|MBR|MUR|MTD|MTP|MTB|BC[0-9]|BZX|P6KE|1\\.5KE|1SMB|SMBJ|TL431|LM3[0-9]{2})", to: "onsemi", conf: B},
+      {mpn: "^(MC68|MC9S|MC9RS|MCF|MPC|MPX|MMA|MRF|MC56|DSP56|MC13[0-9]{3}|MCHC|MC908|MC705|MC711)", to: "NXP Semiconductors", conf: B}],
+     note: "按型号：逻辑/CMOS/ECL/分立/稳压→onsemi(1999)；MCU/MPU/DSP/传感器/射频功率→NXP(Freescale)；其余需逐条判断"}
   - {from: "PHILIPS COMPONENTS", to: "Yageo", conf: B, default_families: "CAPACITOR|RESISTOR|INDUCTOR|FILTER|CIRCUIT_PROTECTION", rules: [{families: "_IC|DIODE|TRANSISTOR|RF_MICROWAVE", to: "NXP Semiconductors"}], note: "2006 半导体分拆为NXP；半导体→NXP；无源→Yageo/Vishay"}
   - {from: "SIGNETICS CORP", to: "NXP Semiconductors", conf: A, note: "Philips→NXP"}
   - {from: "VLSI TECHNOLOGY INC", to: "NXP Semiconductors", conf: A, note: "1999 Philips→NXP"}
