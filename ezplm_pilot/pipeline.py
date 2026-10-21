@@ -134,7 +134,10 @@ def ingest(source, batch: int = 500, max_batches: int | None = None, job: str | 
             sp.orig_category_id, sp.orig_category = p.category_id, p.category
             sp.orig_symbol, sp.orig_symbol_lib, sp.orig_footprint, sp.orig_footprint_lib = p.symbol, p.symbol_lib, p.footprint, p.footprint_lib
             sp.orig_has_pdf, sp.orig_has_image, sp.orig_url = p.has_pdf, p.has_image, p.url
-            sp.attributes_json = json.dumps(getattr(p, "attributes", {}) or {}, ensure_ascii=False)
+            if getattr(p, "attributes", None):                 # 列表接口不带属性：重新拉取时别把处理时从详情接口补来的属性清掉
+                sp.attributes_json = json.dumps(p.attributes, ensure_ascii=False)
+            elif sp.attributes_json is None:
+                sp.attributes_json = "{}"
             sp.value_score = value_score(p)
             sp.fetched_at = datetime.utcnow()
         db.add(JobLog(job=job, stage="ingest", batch_no=batch_no, n_items=len(buf), finished_at=datetime.utcnow()))

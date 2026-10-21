@@ -126,7 +126,7 @@ class ApiSource:
             footprint_lib=(fp.get("category") or {}).get("name", "") if isinstance(fp, dict) and isinstance(fp.get("category"), dict) else (fp.get("category", "") if isinstance(fp, dict) else ""),
             has_pdf=_bool(x.get("hasPdf", x.get("has_pdf", False))),
             has_image=bool(x.get("image") or x.get("imageUrl")),
-            url=x.get("url", "") or "", description=x.get("description", "") or "",
+            url=x.get("officialUrl") or x.get("url") or "", description=x.get("description", "") or "",   # 列表接口里官网链接叫 officialUrl（没有时整个键不出现）
             description_en=x.get("descriptionEn", "") or "", status=x.get("status", "") or "",
         )
 
@@ -173,7 +173,7 @@ class ApiSource:
         cat, sym, fp, pdf = d.get("category") or {}, d.get("symbol") or {}, d.get("footprint") or {}, d.get("pdf") or {}
         mf = d.get("manufacturer") or {}
         return {"categoryId": cat.get("id") if isinstance(cat, dict) else cat, "symbol": sym.get("name") if isinstance(sym, dict) else sym,
-                "footprint": fp.get("name") if isinstance(fp, dict) else fp, "url": d.get("url") or "",
+                "footprint": fp.get("name") if isinstance(fp, dict) else fp, "url": d.get("officialUrl") or d.get("url") or "",
                 "datasheetUrl": (pdf.get("url") if isinstance(pdf, dict) else pdf) or "",
                 "descriptionEn": d.get("descriptionEn") or "", "manufacturer": (mf.get("name") if isinstance(mf, dict) else mf) or ""}
 
