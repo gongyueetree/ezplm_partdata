@@ -22,6 +22,18 @@ rules:
   - {path: "^电路保护 > (保险丝和过流保护|热熔断体（热熔保险丝）)", pins: [2], symbol: "Device:Fuse", unknown: true, conf: 0.88}
   - {path: "^电路保护 > 压敏电阻", pins: [2], symbol: "Device:Varistor", unknown: true, conf: 0.9}
   - {path: "^电路保护 > 瞬态电压抑制器（TVS）", pins: [2], symbol: "Device:D_TVS", conf: 0.85}
+  # ---------------- SOT-23 三极管 / MOSFET（只给引脚排列能确定的）
+  # 条件同时满足：单管分类 + 封装是 3 脚 SOT-23 + 描述写明极性 + 型号属于"SOT-23 标准引脚"的系列。
+  # 标准引脚：三极管 1=B 2=E 3=C，MOSFET 1=G 2=S 3=D。日系（2SC/2SA/罗姆 SST/UMT 等）排列不统一，不在名单里，走专用匹配。
+  # 符号用平台自带的 platform:Q_*（config/generic_symbols/，KiCad 现行库的 Q_NPN/Q_NMOS 引脚编号是字母，对不上数字焊盘）。
+  - {path: "单双极晶体管", desc: "(?<![A-Za-z])NPN(?![A-Za-z])", exclude: "PNP|双|Dual|阵列|预偏置|数字|带电阻|达林顿", mpn: "^(MMBTA?\\d|PMBT\\d|FMMT\\d|BC8[0-9]{2}|BCX7\\d|BCW[0-9]{2})",
+     pkg: "(?<![A-Za-z0-9])SOT-?23(-3)?(?![-\\d])", pins: [3], symbol: "platform:Q_NPN_BEC", conf: 0.86}
+  - {path: "单双极晶体管", desc: "(?<![A-Za-z])PNP(?![A-Za-z])", exclude: "NPN|双|Dual|阵列|预偏置|数字|带电阻|达林顿", mpn: "^(MMBTA?\\d|PMBT\\d|FMMT\\d|BC8[0-9]{2}|BCX7\\d|BCW[0-9]{2})",
+     pkg: "(?<![A-Za-z0-9])SOT-?23(-3)?(?![-\\d])", pins: [3], symbol: "platform:Q_PNP_BEC", conf: 0.86}
+  - {path: "单 FET，MOSFET", desc: "N ?沟道|N-?Channel|N型|NMOS", exclude: "P ?沟道|P-?Channel|双|Dual|互补", mpn: "^(2N7002|BSS138|BSS123|AO34[0-2]\\d|SI23\\d{2}|IRLML\\d|NTR\\d{4}|PMV\\d{2}|NX(3008|7002)|DMG(23|34)|DMN\\d{2,4}|FDN3\\d{2}|FDV30\\d)",
+     pkg: "(?<![A-Za-z0-9])SOT-?23(-3)?(?![-\\d])", pins: [3], symbol: "platform:Q_NMOS_GSD", conf: 0.86}
+  - {path: "单 FET，MOSFET", desc: "P ?沟道|P-?Channel|P型|PMOS", exclude: "N ?沟道|N-?Channel|双|Dual|互补", mpn: "^(BSS84|AO34[0-2]\\d|SI23\\d{2}|IRLML\\d|NTR\\d{4}|PMV\\d{2}|DMG(23|34)|DMP\\d{2,4}|FDN3\\d{2}|FDV30\\d)",
+     pkg: "(?<![A-Za-z0-9])SOT-?23(-3)?(?![-\\d])", pins: [3], symbol: "platform:Q_PMOS_GSD", conf: 0.86}
   # ---------------- 两脚二极管 / LED（多脚、阵列的走专用）
   - {path: "^分立半导体产品 > 二极管", desc: "肖特基|Schottky", pins: [2], symbol: "Device:D_Schottky", conf: 0.88}
   - {path: "^分立半导体产品 > 二极管", desc: "齐纳|稳压|Zener", pins: [2], symbol: "Device:D_Zener", conf: 0.88}

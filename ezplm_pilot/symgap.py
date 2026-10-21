@@ -74,14 +74,22 @@ def package_text(sp: StagedPart) -> str:
 class GenericRules:
     def __init__(self, path: str | Path = RULES_PATH):
         cfg = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-        self.rules = [dict(r, _path=re.compile(r["path"]), _desc=re.compile(r["desc"], re.I) if r.get("desc") else None)
+        self.rules = [dict(r, _path=re.compile(r["path"]), _desc=re.compile(r["desc"], re.I) if r.get("desc") else None,
+                           _mpn=re.compile(r["mpn"], re.I) if r.get("mpn") else None, _pkg=re.compile(r["pkg"], re.I) if r.get("pkg") else None,
+                           _exclude=re.compile(r["exclude"], re.I) if r.get("exclude") else None)
                       for r in cfg.get("rules", [])]
 
-    def match(self, cat_path: str, text: str, pins: int | None) -> tuple[str, float] | None:
+    def match(self, cat_path: str, text: str, pins: int | None, mpn: str = "", pkg: str = "") -> tuple[str, float] | None:
         for r in self.rules:
             if not r["_path"].search(cat_path or ""):
                 continue
             if r["_desc"] and not r["_desc"].search(text or ""):
+                continue
+            if r["_exclude"] and r["_exclude"].search(text or ""):
+                continue
+            if r["_mpn"] and not r["_mpn"].search(mpn or ""):          # 引脚排列靠型号系列保证（如 SOT-23 三极管 MMBT/BC8xx 都是 1=B 2=E 3=C）
+                continue
+            if r["_pkg"] and not r["_pkg"].search(pkg or ""):
                 continue
             allowed = r.get("pins") or []
             conf = float(r.get("conf", 0.8))
@@ -136,7 +144,7 @@ def gap_rows(db, rules: GenericRules | None = None, lineage: Lineage | None = No
             path = tax.path(cid) if cid else (sp.new_category or sp.orig_category or "")
             pkg = package_text(sp)
             pins = pin_count(pkg)
-            g = rules.match(path, f"{sp.mpn or ''} {sp.description or ''} {pkg}", pins)
+            g = rules.match(path, f"{sp.mpn or ''} {sp.description or ''} {sp.description_en or ''} {pkg}", pins, sp.mpn or "", pkg)
             yield {"part_id": sp.id, "mpn": sp.mpn or "", "mpn_norm": sp.mpn_norm or norm_mpn(sp.mpn), "manufacturer": sp.manufacturer or "",
                    "mfr_canonical": lineage.resolve(sp.manufacturer)["current"] if sp.manufacturer else "",
                    "category_path": path, "package": pkg, "pin_count": pins if pins is not None else "", "value_score": sp.value_score or 0,
@@ -173,6 +181,30 @@ def export(db, out_dir: str | Path, log=print) -> dict:
     return dict(st)
 
 
+PLATFORM_SYMBOLS = HERE / "config" / "generic_symbols"
+_platform_cache: dict = {}
+
+
+def platform_symbol(db, name: str) -> dict:
+    """config/generic_symbols/<name>.kicad_sym → 写入 symbol_files（按 SHA 去重），返回 {sha256, pin_count, sources, origin, file}。"""
+    if name in _platform_cache:
+        return _platform_cache[name]
+    import gzip
+    import hashlib
+    from .staging import SymbolFile
+    from .symrender import load, pin_table
+    data = (PLATFORM_SYMBOLS / f"{name}.kicad_sym").read_bytes()
+    sha = hashlib.sha256(data).hexdigest()
+    pins = [p["number"] for p in pin_table(load(data.decode("utf-8")))]
+    if not db.get(SymbolFile, sha):
+        db.add(SymbolFile(sha256=sha, name=name, pin_count=len(pins), pins_json=json.dumps(pins), source="platform",
+                          origin="平台通用符号（KiCad Device 库改数字引脚编号，CC-BY-SA 4.0）", filename=f"{name}.kicad_sym",
+                          size=len(data), content_gz=gzip.compress(data)))
+        db.commit()
+    _platform_cache[name] = {"sha256": sha, "pin_count": len(pins), "sources": ["platform"], "origin": "平台通用符号", "file": f"{name}.kicad_sym"}
+    return _platform_cache[name]
+
+
 def propose_generic(db, auto_min: float = 0.85, job: str | None = None, log=print) -> dict:
     """给"通用"类缺符号物料直接出符号建议（KiCad 官方通用符号），作废同一方法上一轮未复核的建议。"""
     from .ezplm_lib import EzLibrary
@@ -201,8 +233,10 @@ def propose_generic(db, auto_min: float = 0.85, job: str | None = None, log=prin
         lib, name = r["generic_symbol"].split(":", 1)
         conf = float(r["generic_conf"])
         act = "auto_fill" if conf >= auto_min else "review"
-        batch.append(Proposal(r["part_id"], r["mpn"], "symbol", "", name, r["generic_symbol"], conf, act, "generic-symbol",
-                              {"category_path": r["category_path"], "package": r["package"], "pin_count": r["pin_count"], "library": lib},
+        ev = {"category_path": r["category_path"], "package": r["package"], "pin_count": r["pin_count"], "library": lib}
+        if lib == "platform":                       # 平台自带的通用符号（config/generic_symbols/*.kicad_sym），存进 symbol_files 以便预览/下载/引脚核对
+            ev.update(platform_symbol(db, name))
+        batch.append(Proposal(r["part_id"], r["mpn"], "symbol", "", name, r["generic_symbol"], conf, act, "generic-symbol", ev,
                               ["符号自动匹配" if act == "auto_fill" else "符号待复核", "通用符号"]))
         if len(batch) >= 2000:
             for sp in db.execute(select(StagedPart).where(StagedPart.id.in_([p.part_id for p in batch]))).scalars():
