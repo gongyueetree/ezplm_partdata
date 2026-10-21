@@ -93,6 +93,13 @@ class RuleEngine:
             if others:                                    # 多条规则指向不同分类：不自动改，降到复核/模型仲裁
                 conf = min(conf, 0.6)
             out.append(Candidate(cid, conf, "rule:keyword", {"pattern": pat, "conflicts": [self.tax.path(c) for c in others]} if others else {"pattern": pat}))
+        # 型号规则和关键字规则指向不同分类：只留置信度高的那条（略降），免得两条规则互相抵消成低分
+        # （如 ^MIC5 型号规则 vs "驱动配置：…MOSFET" 栅极驱动；晶丰明源 ^BP23 LED 驱动 vs "拓扑结构：降压"）
+        if len(out) == 2 and out[0].category_id != out[1].category_id:
+            win, lose = sorted(out, key=lambda c: -c.conf)
+            win.conf = round(win.conf - 0.05, 3)
+            win.evidence = {**win.evidence, "overrode": {"m": lose.method, "cat": self.tax.path(lose.category_id), "p": lose.evidence.get("pattern")}}
+            out = [win]
         return out
 
     def symbol_consistent(self, p: Part, category_id: str) -> bool | None:

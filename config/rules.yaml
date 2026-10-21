@@ -44,14 +44,15 @@ keyword:
   # LED 驱动（"LED 升压控制器""Buck LED Driver""LED降压恒流驱动"）归 LED 驱动器；外置开关管的"控制器"归 DC-DC 开关控制器
   # 以下几类描述里常带"降压/升压/Boost/DC-DC"，排在 DC-DC 规则前面，DC-DC 规则也排除它们：
   # MOSFET 驱动器（ISL6612/6208/6625"同步整流降压MOSFET驱动器"）、音频功放（AW88xx "Smart Boost…功放"）、充电芯片（SC8815/8902"升降压充电转换器"）
-  - {pattern: "MOSFET ?(栅极)?驱动器|MOSFET Driver|栅极驱动|Gate Driver", exclude: "隔离", category: "电源管理（PMIC） > 栅极驱动器", conf: 0.85}
+  - {pattern: "电荷泵|充电泵|Charge Pump", exclude: "充电器|电池充电", category: "电源管理（PMIC） > 电荷泵", conf: 0.85}
+  - {pattern: "MOSFET ?(栅极)?驱动器|MOSFET Driver|栅极驱动|Gate Driver|驱动配置[:：]|负载类型[:：] ?MOSFET", exclude: "隔离", category: "电源管理（PMIC） > 栅极驱动器", conf: 0.85}
   - {pattern: "功放|音频放大|Audio Amp|Class.?D 放大", category: "放大器 > 音频放大器", conf: 0.88}
   - {pattern: "电池充电|充电管理|充电器 IC|充电(转换器|控制|芯片|IC)|(开关|线性|升压|降压|升降压|锂电池?|锂离子)充电|Battery Charg|Charger IC", exclude: "无线充电|USB ?PD|充电泵|电荷泵", category: "电池充电器", conf: 0.85}
   # 数码管/点阵 LED 显示驱动（TM1668/1629/1651 这类"共阴极 N 段 M 位 + 键盘扫描"）归显示驱动器，不归照明用 LED 驱动器
   - {pattern: "数码管|(\\d|七|八)段|共阴|共阳|键盘扫描|点阵|LED ?矩阵|LED Matrix|LED Display Driver|显示驱动", exclude: "LCD|液晶|背光", category: "电源管理（PMIC） > 显示驱动器", conf: 0.88}
   - {pattern: "LED.{0,15}(驱动|Driver|控制器|Controller)|恒流驱动", exclude: "显示|LCD|数码管|点阵|矩阵|Matrix|Display|(\\d|七|八)段|共阴|共阳|键盘扫描", category: "电源管理（PMIC） > LED 驱动器", conf: 0.85}
-  - {pattern: "(DC[/-]?DC|降压|升压|Buck|Boost).{0,12}(控制器|Controller)", exclude: "平滑|\\d+ ?小时|充电(?!泵)|功放|音频|Audio|MOSFET ?驱动|MOSFET Driver|电容|Capacitor|沟槽|Trench|MOS技术|[μµu]Module|LED|模块|机箱安装|板安装|[Bb]rick|砖", category: "DC-DC 开关控制器", conf: 0.85}
-  - {pattern: "DC[/-]?DC.*(转换器|稳压|开关)|降压|升压|Buck|Boost|电荷泵|充电泵|Charge Pump", exclude: "平滑|\\d+ ?小时|充电(?!泵)|功放|音频|Audio|MOSFET ?驱动|MOSFET Driver|电容|Capacitor|沟槽|Trench|MOS技术|[μµu]Module|LED|控制器|Controller|模块|机箱安装|板安装|[Bb]rick|砖", category: "稳压器 - DC-DC 开关稳压器", conf: 0.85}
+  - {pattern: "(DC[/-]?DC|降压|升压|Buck|Boost).{0,12}(控制器|Controller)", exclude: "通孔型|表面贴装型|电荷泵|平滑|\\d+ ?小时|充电(?!泵)|功放|音频|Audio|MOSFET ?驱动|MOSFET Driver|电容|Capacitor|沟槽|Trench|MOS技术|[μµu]Module|LED|模块|机箱安装|板安装|[Bb]rick|砖", category: "DC-DC 开关控制器", conf: 0.85}
+  - {pattern: "DC[/-]?DC.*(转换器|稳压|开关)|降压|升压|Buck|Boost", exclude: "通孔型|表面贴装型|电荷泵|充电泵|Charge Pump|平滑|\\d+ ?小时|充电(?!泵)|功放|音频|Audio|MOSFET ?驱动|MOSFET Driver|电容|Capacitor|沟槽|Trench|MOS技术|[μµu]Module|LED|控制器|Controller|模块|机箱安装|板安装|[Bb]rick|砖", category: "稳压器 - DC-DC 开关稳压器", conf: 0.85}
   - {pattern: "电压基准|基准电压", category: "电压基准", conf: 0.9}
   - {pattern: "运算放大器|运放|仪表放大器|Op ?Amp", category: "仪器，运算放大器，缓冲器", conf: 0.85}
   - {pattern: "比较器", category: "线性 > 比较器", conf: 0.8}
@@ -99,6 +100,7 @@ mpn:
   - {manufacturer: "Texas Instruments|Infineon", pattern: "^CY2[0-9]", category: "时钟发生器，PLL，频率合成器", conf: 0.85}
   - {manufacturer: "Infineon", pattern: "^CY8C", category: "微控制器（MCU）", conf: 0.95}
   - {manufacturer: "天微|Titan|^TM|中微爱芯|i-?Core", pattern: "^(TM|AIP)16\\d\\d", category: "电源管理（PMIC） > 显示驱动器", conf: 0.85}   # TM1617/1629/1651、AiP1629 数码管驱动
+  - {manufacturer: "晶丰明源|Bright ?Power|BPS", pattern: "^BP(23|99)\\d\\d", category: "电源管理（PMIC） > LED 驱动器", conf: 0.92}   # BP2329/BP9911 等描述只写"拓扑结构：降压"
   - {manufacturer: "onsemi|ON Semi", pattern: "^NSB[AC]\\d{3}\\w*D(XV6|P6)", category: "双极晶体管阵列，预偏置", conf: 0.85}   # 双路带电阻晶体管
   - {manufacturer: "Infineon", pattern: "^(AU)?IRF", category: "单 FET，MOSFET", conf: 0.93}
   - {manufacturer: "Diodes", pattern: "^DM[NP]\\d.*DB", category: "FET、MOSFET 阵列", conf: 0.85}
