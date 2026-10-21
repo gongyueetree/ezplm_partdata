@@ -396,7 +396,10 @@ class Classifier:
         pol = self.policy
         label = self.tax.path(c.category_id)
         if not p.category_id:
-            if c.conf >= pol.auto_fill_min:
+            if not self.tax.is_leaf(c.category_id):
+                # 只猜到大类（如近邻给出"电源管理（PMIC）"）：通过了也只是挂在大类上，没用，不进复核队列，留给规则/大模型
+                action, tags = "skip", ["待分类", "仅大类建议"]
+            elif c.conf >= pol.auto_fill_min:
                 action, tags = "auto_fill", ["自动分类"]
             elif c.conf >= pol.propose_min:
                 action, tags = "review", ["待分类"]
