@@ -167,7 +167,8 @@ JOBS = """{% extends "base" %}{% block body %}
 <form class=inline method=post action="/jobs/reset-processed" onsubmit="return confirm('把所有物料标记为未处理？这些物料的待复核建议会作废（重新处理时重新生成）；已写入的新值保留。')"><button>重置处理状态（规则更新后重跑）</button></form>
 <form class=inline method=post action="/jobs/reset-pending-category" onsubmit="return confirm('把还有这类待复核建议的物料标成未处理？之后运行②处理会按新规则重新生成建议（导入的符号、开源工程建议不受影响）。')"><select name=field><option value=category_id>分类</option><option value=symbol>符号</option><option value=footprint>封装</option><option value=manufacturer>厂商</option><option value=ihs>IHS 匹配丢失的</option></select> <button>只重跑有这类待复核建议的物料</button></form>
 <form class=inline method=post action="/jobs/recheck-footprints" onsubmit="return confirm('按新规则复查封装建议：引脚数对不上、阵列配了单个片式封装的，待复核的驳回、已自动写入的撤销，并把这些物料标成未处理。同时恢复被误作废的导入符号建议。')"><button {{ 'disabled' if busy }}>复查封装建议（引脚数/阵列）</button></form>
-<form class=inline method=post action="/jobs/pincheck"><button {{ 'disabled' if busy }}>引脚核对（器件/符号/封装）</button></form></div>
+<form class=inline method=post action="/jobs/pincheck"><button {{ 'disabled' if busy }}>引脚核对（器件/符号/封装）</button></form>
+<form class=inline method=post action="/jobs/generic-symbols" onsubmit="return confirm('给缺符号的通用件（电阻、电容、电感、磁珠、晶振、保险丝、两脚二极管/LED、排针等，规则见 config/generic_symbols.yaml）出 KiCad 通用符号建议？置信度够的直接写入，可撤销。')"><button {{ 'disabled' if busy }}>通用件符号建议</button></form></div>
 
 <div class=panel><h2>③ 扫描符号/封装来源（scan）</h2>
 <form class=frm method=post action="/jobs/start"><input type=hidden name=kind value=scan>
@@ -803,6 +804,16 @@ def jobs_recheck_footprints(user: str = Depends(auth)):
     except RuntimeError as e:
         return back("/jobs", str(e), True)
     return back("/jobs", "已开始复查封装建议，完成后运行 ② 处理重新出建议")
+
+
+@app.post("/jobs/generic-symbols")
+def jobs_generic_symbols(user: str = Depends(auth)):
+    from . import symgap
+    try:
+        manager.start("generic-symbols", lambda j: symgap.propose_generic(get_session(), log=j.say), {})
+    except RuntimeError as e:
+        return back("/jobs", str(e), True)
+    return back("/jobs", "已开始给通用件出符号建议；完成后在复核队列选 symbol + 方法 generic-symbol 抽检")
 
 
 @app.post("/jobs/pincheck")
