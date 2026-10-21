@@ -58,7 +58,7 @@ class RuleEngine:
         self.tax = tax
         cfg = yaml.safe_load(Path(rules_path).read_text(encoding="utf-8"))
         self.keyword = [(re.compile(r["pattern"], re.I), re.compile(r["exclude"], re.I) if r.get("exclude") else None,
-                         self._resolve(r["category"]), r.get("conf", 0.8)) for r in cfg.get("keyword", [])]
+                         self._resolve(r["category"]), r.get("conf", 0.8), bool(r.get("desc_only"))) for r in cfg.get("keyword", [])]
         self.mpn = [(re.compile(r.get("manufacturer", ".*"), re.I), re.compile(r["pattern"], re.I), self._resolve(r["category"]), r.get("conf", 0.8))
                     for r in cfg.get("mpn", [])]
         self.symbol_lib = cfg.get("symbol_lib", {})
@@ -79,12 +79,13 @@ class RuleEngine:
             if cid and mf_re.search(p.manufacturer or "") and mpn_re.search(p.mpn or ""):
                 out.append(Candidate(cid, conf, "rule:mpn", {"pattern": mpn_re.pattern}))
                 break
-        text = f"{p.description} {p.description_en} {p.mpn}"
         # “128 KB Flash、32 KB SRAM”这类容量+存储词是器件的属性而不是器件类型，先去掉再匹配关键字
-        text_kw = _CAPACITY_RE.sub(" ", text)
+        text_kw = _CAPACITY_RE.sub(" ", f"{p.description} {p.description_en} {p.mpn}")
+        desc_kw = _CAPACITY_RE.sub(" ", f"{p.description} {p.description_en}")   # desc_only 规则：型号里的 "PNP" 之类不算
         hits = []
-        for kw_re, ex_re, cid, conf in self.keyword:
-            if cid and kw_re.search(text_kw) and not (ex_re and ex_re.search(text_kw)):
+        for kw_re, ex_re, cid, conf, desc_only in self.keyword:
+            t = desc_kw if desc_only else text_kw
+            if cid and kw_re.search(t) and not (ex_re and ex_re.search(t)):
                 hits.append((cid, conf, kw_re.pattern))
         if hits:
             cid, conf, pat = hits[0]
