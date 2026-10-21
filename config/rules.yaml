@@ -97,7 +97,7 @@ mpn:
   - {manufacturer: "Texas Instruments", pattern: "^TPS7", category: "稳压器 - 线性稳压器控制器", conf: 0.7}
   - {manufacturer: "Texas Instruments", pattern: "^TPS(5|6)", category: "稳压器 - DC-DC 开关稳压器", conf: 0.8}
   - {manufacturer: "Texas Instruments", pattern: "^MSP430", category: "微控制器（MCU）", conf: 0.97}
-  - {manufacturer: "Texas Instruments|Infineon", pattern: "^CY2[0-9]", category: "时钟发生器，PLL，频率合成器", conf: 0.85}
+  - {manufacturer: "Texas Instruments|Infineon", pattern: "^CY2[0-9]", category: "时钟发生器，PLL，频率合成器", conf: 0.9}   # Cypress 零延迟缓冲/展频时钟（描述只写"扇出缓冲器"），归时钟发生器
   - {manufacturer: "Infineon", pattern: "^CY8C", category: "微控制器（MCU）", conf: 0.95}
   - {manufacturer: "天微|Titan|^TM|中微爱芯|i-?Core", pattern: "^(TM|AIP)16\\d\\d", category: "电源管理（PMIC） > 显示驱动器", conf: 0.85}   # TM1617/1629/1651、AiP1629 数码管驱动
   - {manufacturer: "晶丰明源|Bright ?Power|BPS", pattern: "^BP(23|99)\\d\\d", category: "电源管理（PMIC） > LED 驱动器", conf: 0.92}   # BP2329/BP9911 等描述只写"拓扑结构：降压"
