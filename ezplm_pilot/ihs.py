@@ -38,7 +38,8 @@ LINEAGE_FACTOR = {"A": 0.92, "B": 0.80, "C": 0.65}
 
 # ezPLM 一级分类 → IHS 大类提示（B 级谱系按大类拆分时用）
 ROOT_FAMILY_HINT = [("存储器", "MEMORY_IC"), ("集成电路", "X_IC"), ("分立半导体", "DIODE TRANSISTOR"), ("光电", "OPTOELECTRONIC"),
-                    ("射频", "RF_MICROWAVE"), ("传感器", "SENSOR"), ("电容", "CAPACITOR"), ("电阻", "RESISTOR"), ("连接器", "CONNECTOR")]
+                    ("射频", "RF_MICROWAVE"), ("传感器", "SENSOR"), ("电容", "CAPACITOR"), ("电阻", "RESISTOR"), ("连接器", "CONNECTOR"),
+                    ("电感", "INDUCTOR"), ("滤波器", "FILTERS"), ("电路保护", "CIRCUIT_PROTECTION")]
 
 
 def norm_mpn(s: str) -> str:
@@ -65,10 +66,18 @@ class Lineage:
         self.ez_alias: dict[str, tuple[str, bool]] = {}         # mfr_key(别名) -> (ezPLM 厂商名, 只是代理商)
         if db is not None:
             try:
+                from sqlalchemy import func, select
                 from .ezplm_lib import company_aliases
+                from .staging import StagedPart
+                # ezPLM 里同一家厂商常有两条（"Texas Instruments" / "Texas Instruments Incorporated"），比较键相同时取物料用得多的那个名字
+                used = dict(db.execute(select(StagedPart.manufacturer, func.count()).group_by(StagedPart.manufacturer)).all())
                 for alias, name, only_supplier in company_aliases(db):
                     k = mfr_key(alias)
-                    if k and (k not in self.ez_alias or self.ez_alias[k][1]):    # 同名时制造商优先于代理商
+                    if not k:
+                        continue
+                    cur = self.ez_alias.get(k)
+                    if cur is None or (cur[1] and not only_supplier) or \
+                            (cur[1] == only_supplier and used.get(name, 0) > used.get(cur[0], 0)):     # 制造商优先于代理商；再比物料数
                         self.ez_alias[k] = (name, only_supplier)
             except Exception:  # noqa —— 表还不存在（没拉过 ezPLM 厂商）时退回 YAML 规则
                 self.ez_alias = {}
@@ -80,7 +89,8 @@ class Lineage:
             k = mfr_key(e["from"])
             if k in self.entries:            # 同一厂商可能先手写（带 match）再由映射表生成，取第一条
                 continue
-            e = dict(e, key=k, rules=[(re.compile(r["families"]), r["to"]) for r in e.get("rules", [])])
+            e = dict(e, key=k, rules=[(re.compile(r["families"]), r["to"]) for r in e.get("rules", [])],
+                     default_re=re.compile(e["default_families"]) if e.get("default_families") else None)
             self.entries[k] = e
             if e.get("match"):
                 self.matchers.append((re.compile(e["match"], re.I), e))
@@ -122,6 +132,11 @@ class Lineage:
                 if family and pat.search(family):
                     to = t
                     break
+            else:
+                # 公司只卖掉了部分业务（如西门子：无源→TDK、半导体→Infineon，自动化产品仍是西门子）：
+                # 默认去向只用于 default_families 里的产品，其它（含分不出类别的）保持原厂商
+                if e["default_re"] is not None and not (family and e["default_re"].search(family)):
+                    to = name
             cur = self.canonical(to)
             out = {"current": cur, "conf": e.get("conf", ""), "note": e.get("note", ""), "origin": e["key"]}
             if mfr_key(cur) == mfr_key(self.canonical(name)):        # 映射到自己（如 TE CONNECTIVITY LTD）= 未变更
@@ -474,7 +489,7 @@ class IhsMatcher:
             # 旧厂商名提示（不依赖 IHS 记录）：ezPLM 里写的是已被并购的厂商
             if p.manufacturer:
                 res = self.lineage.resolve(p.manufacturer, family_hint(self._root(p)))
-                if res["conf"]:
+                if res["conf"] in ("A", "B"):                # C 级（如 Motorola：逻辑/分立→onsemi、MCU→NXP）只凭厂商名判断不了，不出建议
                     conf = {"A": 0.95, "B": 0.75, "C": 0.6}.get(res["conf"], 0.6)
                     props.append(Proposal(p.id, p.mpn, "manufacturer", p.manufacturer, res["current"], res["current"], conf, "flag_mismatch",
                                           "mfr-lineage", {"lineage_conf": res["conf"], "note": res["note"]}, ["厂商已并购"]))

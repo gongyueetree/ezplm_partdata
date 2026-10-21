@@ -129,7 +129,8 @@ lineage:
   - {from: "INTERNATIONAL RECTIFIER HIREL PRODUCTS LLC", to: "Infineon Technologies", conf: A, note: "2015 Infineon收购"}
   - {from: "LAMBDA ADVANCED ANALOG INC", to: "Infineon Technologies", conf: C, note: "经IR HiRel并入Infineon，需核实"}
   - {from: "RAMTRON INTERNATIONAL CORP", to: "Infineon Technologies", conf: A, note: "2012 Cypress→Infineon"}
-  - {from: "SIEMENS A G", to: "TDK", conf: B, rules: [{families: "_IC|DIODE|TRANSISTOR|OPTOELECTRONIC|TRIGGER_DEVICE|SENSOR", to: "Infineon Technologies"}], note: "1999 半导体分拆为Infineon；半导体→Infineon；无源→TDK(EPCOS)"}
+  # default_families：默认去向（TDK）只用于这些产品；分不出类别的、自动化产品（SIMATIC/SINAMICS…）保持 Siemens
+  - {from: "SIEMENS A G", to: "TDK", conf: B, default_families: "CAPACITOR|INDUCTOR|FILTER|CIRCUIT_PROTECTION|RESISTOR", rules: [{families: "_IC|DIODE|TRANSISTOR|TRIGGER_DEVICE|SENSOR", to: "Infineon Technologies"}, {families: "OPTOELECTRONIC", to: "ams OSRAM"}], note: "无源(EPCOS)→TDK；半导体→Infineon(1999)；光电→OSRAM；自动化/工控仍是Siemens"}
   - {from: "SIMTEK CORP", to: "Infineon Technologies", conf: A, note: "2008 Cypress→Infineon"}
   - {from: "SPANSION INC", to: "Infineon Technologies", conf: A, note: "2015 Cypress→2020 Infineon"}
   - {from: "SPANSION LLC", to: "Infineon Technologies", conf: A, note: "2015 Cypress→2020 Infineon"}
@@ -187,7 +188,7 @@ lineage:
   - {from: "C&D TECHNOLOGIES INC", to: "Murata Power Solutions", conf: C, note: "需核实；电源模块→Murata"}
   - {from: "FREESCALE SEMICONDUCTOR INC", to: "NXP Semiconductors", conf: A, note: "2015 NXP收购"}
   - {from: "MOTOROLA INC", to: "NXP Semiconductors", conf: C, note: "需按物料逐条判断；标准逻辑/分立/模拟→onsemi(1999)；MCU/DSP/RF→NXP"}
-  - {from: "PHILIPS COMPONENTS", to: "Yageo", conf: B, rules: [{families: "_IC|DIODE|TRANSISTOR|RF_MICROWAVE", to: "NXP Semiconductors"}], note: "2006 半导体分拆为NXP；半导体→NXP；无源→Yageo/Vishay"}
+  - {from: "PHILIPS COMPONENTS", to: "Yageo", conf: B, default_families: "CAPACITOR|RESISTOR|INDUCTOR|FILTER|CIRCUIT_PROTECTION", rules: [{families: "_IC|DIODE|TRANSISTOR|RF_MICROWAVE", to: "NXP Semiconductors"}], note: "2006 半导体分拆为NXP；半导体→NXP；无源→Yageo/Vishay"}
   - {from: "SIGNETICS CORP", to: "NXP Semiconductors", conf: A, note: "Philips→NXP"}
   - {from: "VLSI TECHNOLOGY INC", to: "NXP Semiconductors", conf: A, note: "1999 Philips→NXP"}
   - {from: "NEW JAPAN RADIO CO LTD", to: "Nisshinbo Micro Devices", conf: A, note: "2022 与Ricoh电子器件合并"}
