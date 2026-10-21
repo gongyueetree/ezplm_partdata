@@ -138,7 +138,9 @@ mpn:
   - {manufacturer: "Microchip", pattern: "^(PIC|ATMEGA|ATTINY|ATSAM|dsPIC)", category: "微控制器（MCU）", conf: 0.95}
   - {manufacturer: "Microchip", pattern: "^MIC5|^MCP17", category: "稳压器 - 线性稳压器控制器", conf: 0.7}
   - {manufacturer: "Torex|特瑞仕", pattern: "^XC92|^XC93", category: "稳压器 - DC-DC 开关稳压器", conf: 0.85}
-  - {manufacturer: "Torex|特瑞仕", pattern: "^XC62|^XC64", category: "稳压器 - 线性稳压器控制器", conf: 0.8}
+  # Torex：XC62/64/65/66/67 系列是 LDO（XC6701 28V 高速 LDO，描述只写"稳压器"，近邻猜成反相稳压器）；XC63 是 DC-DC、XC61 是电压检测器，不在内
+  - {manufacturer: "Torex|特瑞仕", pattern: "^XC6[24567]\\d", category: "稳压器 - 线性稳压器控制器", conf: 0.88}
+  - {manufacturer: "Torex|特瑞仕", pattern: "^XC61[A-Z0-9]", category: "电源管理（PMIC） > 电源监控器", conf: 0.85}
   - {manufacturer: "Vishay", pattern: "^ZGL41|^BZX|^BZT", category: "单齐纳二极管", conf: 0.9}
   - {manufacturer: "Rohm|罗姆", pattern: "^RLZ|^MTZJ|^UDZ|^KDZ", category: "单齐纳二极管", conf: 0.9}
   - {manufacturer: "Mini-Circuits", pattern: "^(VLF|ZVBP|ZX75|BFCN|LFCN|HFCN|SXBP)", category: "RF 滤波器", conf: 0.9}
