@@ -46,7 +46,7 @@ keyword:
   # MOSFET 驱动器（ISL6612/6208/6625"同步整流降压MOSFET驱动器"）、音频功放（AW88xx "Smart Boost…功放"）、充电芯片（SC8815/8902"升降压充电转换器"）
   - {pattern: "MOSFET ?(栅极)?驱动器|MOSFET Driver|栅极驱动|Gate Driver", exclude: "隔离", category: "电源管理（PMIC） > 栅极驱动器", conf: 0.85}
   - {pattern: "功放|音频放大|Audio Amp|Class.?D 放大", category: "放大器 > 音频放大器", conf: 0.88}
-  - {pattern: "电池充电|充电管理|充电器 IC|充电(转换器|控制|芯片|IC)|Battery Charg", category: "电池充电器", conf: 0.85}
+  - {pattern: "电池充电|充电管理|充电器 IC|充电(转换器|控制|芯片|IC)|(开关|线性|升压|降压|升降压|锂电池?|锂离子)充电|Battery Charg|Charger IC", exclude: "无线充电|USB ?PD|充电泵|电荷泵", category: "电池充电器", conf: 0.85}
   # 数码管/点阵 LED 显示驱动（TM1668/1629/1651 这类"共阴极 N 段 M 位 + 键盘扫描"）归显示驱动器，不归照明用 LED 驱动器
   - {pattern: "数码管|(\\d|七|八)段|共阴|共阳|键盘扫描|点阵|LED ?矩阵|LED Matrix|LED Display Driver|显示驱动", exclude: "LCD|液晶|背光", category: "电源管理（PMIC） > 显示驱动器", conf: 0.88}
   - {pattern: "LED.{0,15}(驱动|Driver|控制器|Controller)|恒流驱动", exclude: "显示|LCD|数码管|点阵|矩阵|Matrix|Display|(\\d|七|八)段|共阴|共阳|键盘扫描", category: "电源管理（PMIC） > LED 驱动器", conf: 0.85}
