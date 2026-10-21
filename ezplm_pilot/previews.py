@@ -63,13 +63,19 @@ def _symbol_text(name: str) -> tuple[str, str, str] | None:
     for src, lb in rows:
         p = Path(src)
         texts = []
-        if p.is_dir():
-            f = p / f"{nm}.kicad_sym"
-            if f.exists():
-                texts.append(f.read_text("utf-8", "ignore"))
-                m = re.search(r'\(extends\s+"([^"]+)"', texts[0])
-                if m and (p / f"{m.group(1)}.kicad_sym").exists():
-                    texts.insert(0, (p / f"{m.group(1)}.kicad_sym").read_text("utf-8", "ignore"))
+        # KiCad 9+ 的 X.kicad_symdir：库索引记的可能是目录，也可能是目录里这个符号的文件
+        symdir = p if p.is_dir() else (p.parent if p.parent.name.endswith(".kicad_symdir") else None)
+        if symdir:
+            want, seen = nm, set()
+            while want and want not in seen and len(seen) < 5:          # 派生符号（extends）的父符号在同目录的另一个文件里
+                seen.add(want)
+                f = symdir / f"{want}.kicad_sym"
+                if not f.exists():
+                    break
+                t = f.read_text("utf-8", "ignore")
+                texts.insert(0, t)
+                m = re.search(r'\(extends\s+"([^"]+)"', t)
+                want = m.group(1) if m else None
         elif p.exists():
             texts.append(p.read_text("utf-8", "ignore"))
         if texts:
@@ -159,7 +165,7 @@ def for_part(db, p, props) -> dict:
         ev = json.loads(r.evidence_json or "{}")
         # 导入的符号文件按 SHA 取；KiCad 库建议（如 Diode:BZX84Cxx）按名字到扫描过的库里取
         pv = symbol_by_sha(db, ev["sha256"]) if ev.get("sha256") else symbol_by_name(r.proposed)
-        if pv:
+        if pv and pv.get("units"):
             pv.update(value=r.proposed, status={"approved": "已通过", "auto": "已自动写入", "pending": "建议（待复核）"}[r.review_status])
             out["symbol"] = pv
             break
