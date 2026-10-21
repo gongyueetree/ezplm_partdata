@@ -46,7 +46,10 @@ keyword:
   - {pattern: "比较器", category: "线性 > 比较器", conf: 0.8}
   - {pattern: "模数转换器|\\bADC\\b", category: "模数转换器（ADC）", conf: 0.85}
   - {pattern: "数模转换器|\\bDAC\\b", category: "数模转换器（DAC）", conf: 0.85}
-  - {pattern: "时钟发生器|频率合成器|\\bPLL\\b|扇出缓冲器|时钟缓冲", category: "时钟发生器，PLL，频率合成器", conf: 0.85}
+  # 时钟缓冲/扇出/分配归"时钟缓冲器，驱动器，分配器"；带 PLL 的石英/TCXO 振荡器归有源晶振（都要排在 PLL 规则前面，先命中的生效）
+  - {pattern: "时钟缓冲|扇出缓冲|扇出驱动|时钟分配|时钟驱动器|Clock (Buffer|Driver|Distribution)|Fan-?out Buffer", exclude: "零延迟|Zero.?Delay", category: "时钟缓冲器，驱动器，分配器", conf: 0.88}
+  - {pattern: "有源晶振|晶体振荡器|时钟振荡器|石英.{0,12}振荡器|(?<![A-Za-z])(TCXO|OCXO|VCXO|XO)(?![A-Za-z])", exclude: "无源晶振|谐振器", category: "振荡器（有源晶振）", conf: 0.9}
+  - {pattern: "时钟发生器|频率合成器|\\bPLL\\b|零延迟缓冲", exclude: "时钟缓冲|扇出缓冲|振荡器|晶振|Oscillator", category: "时钟发生器，PLL，频率合成器", conf: 0.85}
   - {pattern: "实时时钟|\\bRTC\\b", category: "实时时钟", conf: 0.9}
   # PPR（每转脉冲数）必须是独立单词：不区分大小写时 "suppressor""approximately" 里都有 ppr（TVS、触摸按键芯片曾被判成编码器）
   - {pattern: "旋转编码器|光学编码器|(?<![A-Za-z])PPR(?![A-Za-z])", category: "编码器", conf: 0.9}
@@ -74,7 +77,6 @@ keyword:
   - {pattern: "钽电容", category: "钽电容器", conf: 0.9}
   - {pattern: "贴片电阻|厚膜电阻|薄膜电阻|片式电阻", category: "片式贴装电阻器", conf: 0.9}
   - {pattern: "晶体谐振器|无源晶振|石英晶体", category: "晶体（无源晶振）", conf: 0.9}
-  - {pattern: "有源晶振|晶体振荡器|时钟振荡器", category: "振荡器（有源晶振）", conf: 0.9}
   - {pattern: "排针", category: "排针", conf: 0.9}
   - {pattern: "排母", category: "排母", conf: 0.9}
   - {pattern: "Type-?C|USB 连接器|USB连接器", category: "USB连接器", conf: 0.9}
