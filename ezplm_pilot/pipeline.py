@@ -276,7 +276,8 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
             ezlib.annotate(props)                # 符号/封装建议标出 ezPLM ID，或打"需新建"
         t1 = time.perf_counter()
         # 重跑时作废上一轮同物料、同字段的待复核建议，避免重复
-        old = db.execute(select(StagedProposal).where(StagedProposal.part_id.in_(list(by_id)), StagedProposal.review_status == "pending")).scalars().all()
+        old = db.execute(select(StagedProposal).where(StagedProposal.part_id.in_(list(by_id)), StagedProposal.review_status == "pending",
+                                                       _regenerated())).scalars().all()
         for o in old:
             o.review_status = "rejected"; o.review_note = "superseded by reprocess"
         by_field = _save_proposals(db, props, by_id, job, tax, stats)
@@ -406,6 +407,15 @@ def ihs_match(batch: int = 500, job: str | None = None, only_matched: bool = Tru
     return stats
 
 
+# 不是 ② 处理生成的建议（三批符号导入、符号仓库匹配、开源工程、通用符号）：重新处理不会再生成，所以重跑时不能作废
+EXTERNAL_METHODS = ("symset", "symmatch", "oshw", "generic-symbol")
+
+
+def _regenerated():
+    """重新处理会重新生成的建议（作废旧建议时只动这些）。"""
+    return ~or_(*[StagedProposal.method.like(m + "%") for m in EXTERNAL_METHODS])
+
+
 def reset_parts_with_pending(field: str = "category_id") -> int:
     """规则改了以后只重跑受影响的物料：把还有该字段待复核建议的物料标成未处理（其待复核建议随后由 void_stale_pending 作废，
     重新处理时按新规则重新生成）。比"重置处理状态"全量重跑快得多。"""
@@ -419,12 +429,74 @@ def reset_parts_with_pending(field: str = "category_id") -> int:
     return n or 0
 
 
+def recheck_footprints(stop=None, log=None, progress=None) -> dict:
+    """按新的封装把关规则复查已有的封装建议（描述映射 / IHS 封装）：
+    - 引脚数对不上（"SOT-23-6封装"被映射成 3 脚 SOT-23）、阵列/排阻配了单个片式封装 → 待复核的驳回；已自动写入的撤销
+    - 这些物料标成未处理，② 处理时按新规则重新出建议
+    另外把重跑时被误作废的导入建议（三批符号、符号仓库匹配、开源工程、通用符号）恢复成待复核。"""
+    from sqlalchemy import update
+    from .packages import footprint_conflict
+    from .staging import IhsRef
+    log = log or (lambda m: None)
+    db = get_session()
+    q = select(StagedProposal).where(StagedProposal.field == "footprint", StagedProposal.review_status.in_(("auto", "pending")),
+                                     or_(StagedProposal.method.like("package-map%"), StagedProposal.method.like("ihs%")))
+    total = db.execute(select(func.count()).select_from(q.subquery())).scalar() or 0
+    st = {"checked": 0, "rejected": 0, "reverted": 0, "parts_reset": 0, "restored": 0}
+    last = 0
+    while not (stop and stop()):
+        prs = db.execute(q.where(StagedProposal.id > last).order_by(StagedProposal.id).limit(2000)).scalars().all()
+        if not prs:
+            break
+        last = prs[-1].id
+        parts = {sp.id: sp for sp in db.execute(select(StagedPart).where(StagedPart.id.in_({x.part_id for x in prs}))).scalars()}
+        evs = {x.id: json.loads(x.evidence_json or "{}") for x in prs}
+        objids = {e.get("ihs_objid") for e in evs.values() if e.get("ihs_objid")}
+        ihs = {r.objid: r for r in db.execute(select(IhsRef).where(IhsRef.objid.in_(objids))).scalars()} if objids else {}
+        reset = set()
+        for x in prs:
+            sp = parts.get(x.part_id)
+            if not sp:
+                continue
+            e = evs[x.id]
+            r = ihs.get(e.get("ihs_objid"))
+            text = " ".join(filter(None, [e.get("package_text"), r and r.package, r and r.description, sp.description, sp.description_en]))
+            why = footprint_conflict(x.proposed_label or x.proposed, text)
+            st["checked"] += 1
+            if not why:
+                continue
+            if x.review_status == "auto":
+                if sp.new_footprint == x.proposed:
+                    sp.new_footprint = None
+                st["reverted"] += 1
+            else:
+                st["rejected"] += 1
+            x.review_status, x.review_note, x.reviewed_at = "rejected", f"recheck: {why}", datetime.utcnow()
+            reset.add(sp.id)
+        for pid in reset:
+            parts[pid].processed_at = None
+        st["parts_reset"] += len(reset)
+        db.commit()
+        log(f"  已复查 {st['checked']}/{total}：驳回 {st['rejected']}，撤销自动写入 {st['reverted']}")
+        if progress:
+            progress({"done": st["checked"], "total": total})
+    # 重跑时被误作废的导入建议 → 恢复待复核（作废原因是"重新处理"或"未处理物料上的旧建议"）
+    n = db.execute(update(StagedProposal).where(~_regenerated(), StagedProposal.review_status == "rejected",
+                                                StagedProposal.review_note.in_(("superseded by reprocess", "stale: part unprocessed")))
+                   .values(review_status="pending", review_note=None, reviewed_at=None), execution_options={"synchronize_session": False}).rowcount
+    st["restored"] = n or 0
+    db.commit()
+    db.close()
+    log(f"完成：{st}")
+    return st
+
+
 def void_stale_pending() -> int:
     """作废"未处理"物料上的待复核建议：它们是旧规则留下的（物料被重置或从未按当前规则处理），重新处理时会重新生成。"""
     from sqlalchemy import update
     db = get_session()
     stale = select(StagedPart.id).where(StagedPart.processed_at.is_(None))
-    n = db.execute(update(StagedProposal).where(StagedProposal.review_status == "pending", StagedProposal.part_id.in_(stale))
+    n = db.execute(update(StagedProposal).where(StagedProposal.review_status == "pending", StagedProposal.part_id.in_(stale), _regenerated())
                    .values(review_status="rejected", review_note="stale: part unprocessed", reviewed_at=datetime.utcnow()),
                    execution_options={"synchronize_session": False}).rowcount
     db.commit()

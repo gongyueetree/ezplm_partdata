@@ -44,9 +44,10 @@ def find_package(text: str) -> str:
 
 def footprint_conflict(kicad: str, text: str) -> str | None:
     """映射出的封装和文字矛盾时给出原因（不出建议）：引脚数对不上；多元件器件配了两端片式封装。"""
-    from .kicad import expected_pins_from_footprint
+    from .kicad import DESC_PKG_PINS, expected_pins_from_footprint
     name = kicad.split(":")[-1]
-    n = pins_in_text(text)
+    pk = find_package(text)                                           # "SOT-23-6封装" → 6；"SOT363" → 6
+    n = pins_in_text(text) or expected_pins_from_footprint(DESC_PKG_PINS.get(pk.upper().replace("-", ""), pk))
     exp = expected_pins_from_footprint(name)
     if exp is None and name.startswith(("SOT-23", "SOT-323")) and not re.search(r"-\d$", name):
         exp = 3
