@@ -95,6 +95,7 @@ mpn:
   - {manufacturer: "Texas Instruments", pattern: "^MSP430", category: "微控制器（MCU）", conf: 0.97}
   - {manufacturer: "Texas Instruments|Infineon", pattern: "^CY2[0-9]", category: "时钟发生器，PLL，频率合成器", conf: 0.85}
   - {manufacturer: "Infineon", pattern: "^CY8C", category: "微控制器（MCU）", conf: 0.95}
+  - {manufacturer: "天微|Titan|^TM|中微爱芯|i-?Core", pattern: "^(TM|AIP)16\\d\\d", category: "电源管理（PMIC） > 显示驱动器", conf: 0.85}   # TM1617/1629/1651、AiP1629 数码管驱动
   - {manufacturer: "onsemi|ON Semi", pattern: "^NSB[AC]\\d{3}\\w*D(XV6|P6)", category: "双极晶体管阵列，预偏置", conf: 0.85}   # 双路带电阻晶体管
   - {manufacturer: "Infineon", pattern: "^(AU)?IRF", category: "单 FET，MOSFET", conf: 0.93}
   - {manufacturer: "Diodes", pattern: "^DM[NP]\\d.*DB", category: "FET、MOSFET 阵列", conf: 0.85}
