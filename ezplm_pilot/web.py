@@ -165,7 +165,7 @@ JOBS = """{% extends "base" %}{% block body %}
 <label><input type=checkbox name=details value=1 checked> 拉取物料属性（缺封装的物料逐条调 ezPLM 详情接口，用于封装映射；较慢，首轮全量可先不勾）</label>
 <p><button class=pri {{ 'disabled' if busy }}>开始处理</button> <span class=mute>待处理 {{ s.parts_total - s.parts_processed }} 条</span></p></form>
 <form class=inline method=post action="/jobs/reset-processed" onsubmit="return confirm('把所有物料标记为未处理？这些物料的待复核建议会作废（重新处理时重新生成）；已写入的新值保留。')"><button>重置处理状态（规则更新后重跑）</button></form>
-<form class=inline method=post action="/jobs/reset-pending-category" onsubmit="return confirm('把还有这类待复核建议的物料标成未处理？之后运行②处理会按新规则重新生成建议（导入的符号、开源工程建议不受影响）。')"><select name=field><option value=category_id>分类</option><option value=symbol>符号</option><option value=footprint>封装</option></select> <button>只重跑有这类待复核建议的物料</button></form>
+<form class=inline method=post action="/jobs/reset-pending-category" onsubmit="return confirm('把还有这类待复核建议的物料标成未处理？之后运行②处理会按新规则重新生成建议（导入的符号、开源工程建议不受影响）。')"><select name=field><option value=category_id>分类</option><option value=symbol>符号</option><option value=footprint>封装</option><option value=ihs>IHS 匹配丢失的</option></select> <button>只重跑有这类待复核建议的物料</button></form>
 <form class=inline method=post action="/jobs/recheck-footprints" onsubmit="return confirm('按新规则复查封装建议：引脚数对不上、阵列配了单个片式封装的，待复核的驳回、已自动写入的撤销，并把这些物料标成未处理。同时恢复被误作废的导入符号建议。')"><button {{ 'disabled' if busy }}>复查封装建议（引脚数/阵列）</button></form></div>
 
 <div class=panel><h2>③ 扫描符号/封装来源（scan）</h2>
@@ -766,6 +766,9 @@ def jobs_reset(user: str = Depends(auth)):
 def jobs_reset_pending_category(field: str = Form("category_id"), user: str = Depends(auth)):
     if manager.is_busy():
         return back("/jobs", "有任务在运行，等它结束再操作", True)
+    if field == "ihs":                                # 型号在 IHS 库里却没记 IHS 匹配的（IHS 模块出错那轮留下的）
+        n = pipeline.reset_parts_ihs_lost()
+        return back("/jobs", f"已把 {n} 条 IHS 匹配丢失的物料标成未处理；现在运行 ② 处理即可补回 IHS 建议")
     if field not in ("category_id", "symbol", "footprint"):
         field = "category_id"
     n = pipeline.reset_parts_with_pending(field)

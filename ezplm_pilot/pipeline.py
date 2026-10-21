@@ -257,9 +257,9 @@ def process(batch: int = 200, max_batches: int | None = None, use_llm: bool = Fa
             ihs_props = ihs.propose(parts)
         except Exception as e:  # noqa
             log(f"  ! IHS模块出错，本批跳过该模块：{str(e)[:200]}")
-            ihs_props, ihs.best = [], {}
+            ihs_props, ihs.best = [], None                    # None：本批不改物料上已记的 IHS 匹配（{} 会把它们清空）
         timing["IHS"] = time.perf_counter() - t1
-        clf_parts, ihs_desc = _with_ihs_desc(parts, ihs.best)
+        clf_parts, ihs_desc = _with_ihs_desc(parts, ihs.best or {})
         for name, fn in (("分类", lambda: _tag_ihs_desc(clf.classify_many(clf_parts), ihs_desc)), ("封装(MPN映射)", lambda: list(propose_footprints_by_mpn(parts, idx)) if idx else []),
                          ("封装", lambda: list(pkg.propose(parts, attrs))),
                          ("ezPLM 符号", lambda: ezlib.propose_symbols_by_mpn(parts, auto_fill_min)),
@@ -332,6 +332,8 @@ def _ihs_props(ihs_props: list[Proposal], by_id: dict, existing: list[Proposal],
             sp.mpn_norm = norm_mpn(sp.mpn)
     seen = {(p.part_id, p.field, p.proposed) for p in existing}
     out = [p for p in ihs_props if (p.part_id, p.field, p.proposed) not in seen]
+    if best is None:                                  # IHS 模块本批出错：保留物料原有的 IHS 匹配
+        return out
     for pid, sp in by_id.items():
         b = best.get(pid)
         sp.ihs_objid, sp.ihs_match = (b[0].objid, b[1]) if b else (None, None)
@@ -489,6 +491,19 @@ def recheck_footprints(stop=None, log=None, progress=None) -> dict:
     db.close()
     log(f"完成：{st}")
     return st
+
+
+def reset_parts_ihs_lost() -> int:
+    """型号在 IHS 参考库里、却没有记下 IHS 匹配的已处理物料 → 标成未处理（IHS 模块出错的那轮处理留下的），重新处理时补回。"""
+    from sqlalchemy import update
+    from .staging import IhsRef
+    db = get_session()
+    n = db.execute(update(StagedPart).where(StagedPart.processed_at.isnot(None), StagedPart.ihs_objid.is_(None),
+                                            StagedPart.mpn_norm.in_(select(IhsRef.mpn_norm)))
+                   .values(processed_at=None), execution_options={"synchronize_session": False}).rowcount
+    db.commit()
+    db.close()
+    return n or 0
 
 
 def void_stale_pending() -> int:

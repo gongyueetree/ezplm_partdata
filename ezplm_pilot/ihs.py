@@ -504,7 +504,7 @@ class IhsMatcher:
                     fc = round(hit[1] * conf * 0.95, 3)
                     act = "auto_fill" if fc >= self.auto_min else "review"
                     props.append(Proposal(p.id, p.mpn, "footprint", "", hit[0].split(":")[-1], hit[0], fc, act, "ihs-package",
-                                          dict(ev, package_text=m.group(1)), ["封装自动映射" if act == "auto_fill" else "封装待复核"]))
+                                          dict(ev, package_text=pk), ["封装自动映射" if act == "auto_fill" else "封装待复核"]))
         return props
 
 
