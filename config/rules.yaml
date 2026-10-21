@@ -32,13 +32,13 @@ keyword:
   - {pattern: "TVS|瞬态电压抑制|transient voltage suppress", category: "TVS 二极管", conf: 0.9}
   - {pattern: "肖特基|整流二极管|快恢复二极管|Schottky", category: "单二极管", conf: 0.85}
   - {pattern: "双 ?[NP] ?沟道|Dual.*MOSFET|MOSFET 阵列", category: "FET、MOSFET 阵列", conf: 0.9}
-  - {pattern: "[NP] ?沟道.*MOSFET|MOSFET.*[NP] ?沟道|MOSFET.*(DPAK|SOT|TO-)", category: "单 FET，MOSFET", conf: 0.88}
+  - {pattern: "[NP] ?沟道.*MOSFET|MOSFET.*[NP] ?沟道|MOSFET.*(DPAK|SOT|TO-)", exclude: "双 ?[NP]|Dual|阵列|Array|驱动器|Driver", category: "单 FET，MOSFET", conf: 0.88}
   - {pattern: "\\bIGBT\\b", category: "单 IGBT", conf: 0.8}
   # 射频放大器（Qorvo QPA/SGL 这类"硅锗异质结双极晶体管放大器"MMIC）不是分立 BJT；要有频率/射频字样，"NPN 通用放大器"不算
   - {pattern: "(\\d\\s*[MG]Hz|射频|微波|RF).{0,40}放大器|低噪声放大器|(?<![A-Za-z])(LNA|MMIC)(?![A-Za-z])|增益模块|Gain Block", exclude: "运算放大器|运放|音频|仪表放大|差分放大器|功率放大器模块", category: "射频和无线 > 射频放大器", conf: 0.85}
-  - {pattern: "(双|多芯片|Dual).{0,6}(NPN|PNP)|(NPN|PNP).{0,10}(多芯片|阵列|Array)|NPN ?\\+ ?PNP", exclude: "预偏置|偏置电阻|带电阻|内置电阻|数字晶体管", category: "双极晶体管阵列", conf: 0.85, desc_only: true}
+  - {pattern: "(双|多芯片|Dual).{0,6}(NPN|PNP)|(NPN|PNP).{0,10}(多芯片|阵列|Array)|(NPN|PNP) ?\\+ ?(NPN|PNP)", exclude: "预偏置|偏置电阻|带电阻|内置电阻|数字晶体管", category: "双极晶体管阵列", conf: 0.85, desc_only: true}
   # NPN/PNP 只看描述（型号 PNP3806 之类不是晶体管），且要有边界
-  - {pattern: "(?<![A-Za-z])(NPN|PNP|BJT)(?![A-Za-z])|双极晶体管", exclude: "预偏置|偏置电阻|带电阻|内置电阻|数字晶体管|阵列|多芯片|双 ?NPN|双 ?PNP|NPN ?\\+ ?PNP|Dual|Array|MHz|GHz|射频|微波|异质结|MMIC|放大器模块", category: "单双极晶体管", conf: 0.8, desc_only: true}
+  - {pattern: "(?<![A-Za-z])(NPN|PNP|BJT)(?![A-Za-z])|双极晶体管", exclude: "预偏置|偏置电阻|带电阻|内置电阻|数字晶体管|阵列|多芯片|双 ?NPN|双 ?PNP|(NPN|PNP) ?\\+ ?(NPN|PNP)|调节器|稳压器|Regulator|Dual|Array|MHz|GHz|射频|微波|异质结|MMIC|放大器模块", category: "单双极晶体管", conf: 0.8, desc_only: true}
   - {pattern: "LDO|线性稳压器|低压差", category: "稳压器 - 线性稳压器控制器", conf: 0.6}
   # 排除电源模块（如 "DC/DC转换器 – 机箱安装型 120W …8thBrick"）：它们不是 IC，交给近邻/LLM/人工
   # LED 驱动（"LED 升压控制器""Buck LED Driver""LED降压恒流驱动"）归 LED 驱动器；外置开关管的"控制器"归 DC-DC 开关控制器
