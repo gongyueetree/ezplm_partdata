@@ -466,7 +466,7 @@ class IhsMatcher:
         return out
 
     def propose(self, parts: list[Part]) -> list[Proposal]:
-        from .packages import PKG_IN_DESC
+        from .packages import find_package, footprint_conflict
         cands = self.lookup(norm_mpn(p.mpn) for p in parts)
         props: list[Proposal] = []
         self.best = {}
@@ -495,8 +495,11 @@ class IhsMatcher:
             if not p.manufacturer and level == "L4" and conf >= 0.7:
                 props.append(Proposal(p.id, p.mpn, "manufacturer", "", r.mfr_current, r.mfr_current, conf, "review", method, ev, ["厂商待复核"]))
             if not p.footprint and self.pkg:
-                m = PKG_IN_DESC.search(f"{r.package} {r.description}")
-                hit = self.pkg.map_name(m.group(1), self._root(p)) if m else None
+                txt = f"{r.package} {r.description} {p.description}"
+                pk = find_package(f"{r.package} {r.description}")            # "SOT-23, 5 PIN" → SOT-23-5
+                hit = self.pkg.map_name(pk, self._root(p)) if pk else None
+                if hit and footprint_conflict(hit[0], txt):                  # 引脚数对不上 / 阵列配了单个片式封装
+                    hit = None
                 if hit:
                     fc = round(hit[1] * conf * 0.95, 3)
                     act = "auto_fill" if fc >= self.auto_min else "review"

@@ -88,13 +88,14 @@ def load(text: str, name: str | None = None) -> dict | None:
     if not syms:
         return None
     sym = syms.get(name) if name and name in syms else list(syms.values())[-1]
+    shown = str(sym[1])                                                # 派生符号显示自己的名字（LM358），图形取父符号（LM2904）
     seen = set()
     while (ext := _get(sym, "extends")) and str(ext[1]) in syms and str(ext[1]) not in seen:   # 派生符号：图形和引脚在父符号里
         seen.add(str(ext[1]))
         sym = syms[str(ext[1])]
     pn = _get(sym, "pin_names")
     off = _get(pn or [], "offset")
-    out = {"name": str(sym[1]), "units": {}, "pins": [], "pin_names_offset": _num(off, 1, 0.508) if off else 0.508,
+    out = {"name": shown, "units": {}, "pins": [], "pin_names_offset": _num(off, 1, 0.508) if off else 0.508,
            "hide_names": _hidden(pn), "hide_numbers": _hidden(_get(sym, "pin_numbers"))}
     subs = _all(sym, "symbol") or [sym]
     for sub in subs:

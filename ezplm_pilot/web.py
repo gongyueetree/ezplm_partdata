@@ -280,7 +280,7 @@ PART = """{% extends "base" %}{% import "preview" as P %}{% block topright %}<sp
 <div class=panel><h2>建议与复核</h2>
 <table><tr><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>状态</th><th>操作</th><th>证据</th></tr>
 {% for r in props %}<tr class="{{ 'new' if r.review_status in ('auto','approved') }}">
-<td>{{ r.field }}</td><td class=mute>{{ r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b>{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/preview?sym={{ ev.sha256 }}" target=_blank>预览</a> · <a href="/symbol-files/{{ ev.sha256 }}" class=mute>下载 .kicad_sym（{{ ev.pin_count }} 脚，{{ ev.sources|join('+') }}）</a>{% elif r.field=='footprint' %}<br><a href="/preview?fp={{ r.proposed|urlencode }}" target=_blank>预览</a>{% endif %}{% if 'conflict' in ev %}<br><span class=diff>与其它来源引脚不一致：{% for x in ev.conflict %}{{ x.source }} {{ x.pin_count }} 脚{% if not loop.last %}，{% endif %}{% endfor %}</span>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
+<td>{{ r.field }}</td><td class=mute>{{ r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b>{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/preview?sym={{ ev.sha256 }}" target=_blank>预览</a> · <a href="/symbol-files/{{ ev.sha256 }}" class=mute>下载 .kicad_sym（{{ ev.pin_count }} 脚，{{ ev.sources|join('+') }}）</a>{% elif r.field=='symbol' and r.proposed %}<br><a href="/preview?symname={{ r.proposed|urlencode }}" target=_blank>预览</a>{% elif r.field=='footprint' %}<br><a href="/preview?fp={{ r.proposed|urlencode }}" target=_blank>预览</a>{% endif %}{% if 'conflict' in ev %}<br><span class=diff>与其它来源引脚不一致：{% for x in ev.conflict %}{{ x.source }} {{ x.pin_count }} 脚{% if not loop.last %}，{% endif %}{% endfor %}</span>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
 <td class="act-{{ r.action }}">{{ r.action }}</td><td class=mute>{{ r.method }}</td><td>{{ r.review_status }}{% if r.reviewed_by %}<br><span class=mute>{{ r.reviewed_by }} {{ r.reviewed_at|local }}</span>{% endif %}</td>
 <td style="white-space:nowrap">{% if r.review_status=='pending' %}<form class=inline method=post action="/review/{{ r.id }}/approve"><button class=ok>通过</button></form> <form class=inline method=post action="/review/{{ r.id }}/reject"><button class=bad>驳回</button></form>
 {% elif r.review_status=='auto' %}<form class=inline method=post action="/review/{{ r.id }}/revert"><button class=bad>撤销自动写入</button></form>{% endif %}</td>
@@ -304,7 +304,7 @@ REVIEW = """{% extends "base" %}{% block topright %}<a class=btn href="/review/g
 <table><tr><th>型号</th><th>制造商</th><th>描述</th><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>操作</th></tr>
 {% for r,p in rows %}<tr>
 <td><a href="/parts/{{ p.id }}">{{ p.mpn }}</a></td><td class=mute>{{ p.manufacturer }}</td><td class=mute style="max-width:260px">{{ (p.description or '')[:80] }}</td>
-<td>{{ r.field }}</td><td class=mute>{{ r.current_label or r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b>{% if r.field=='symbol' %}{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/preview?sym={{ ev.sha256 }}" target=_blank title="打开预览"><img src="/symbol-files/{{ ev.sha256 }}/preview.svg" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;background:#fff;margin-top:4px" onerror="this.remove()"></a>{% endif %}{% elif r.field=='footprint' and r.proposed %}<br><a href="/preview?fp={{ r.proposed|urlencode }}" target=_blank title="打开预览"><img src="/footprints/preview.svg?name={{ r.proposed|urlencode }}" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;margin-top:4px" onerror="this.remove()"></a>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
+<td>{{ r.field }}</td><td class=mute>{{ r.current_label or r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b>{% if r.field=='symbol' %}{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/preview?sym={{ ev.sha256 }}" target=_blank title="打开预览"><img src="/symbol-files/{{ ev.sha256 }}/preview.svg" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;background:#fff;margin-top:4px" onerror="this.remove()"></a>{% elif r.proposed %}<br><a href="/preview?symname={{ r.proposed|urlencode }}" target=_blank title="打开预览"><img src="/symbols/preview.svg?name={{ r.proposed|urlencode }}" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;background:#fff;margin-top:4px" onerror="this.remove()"></a>{% endif %}{% elif r.field=='footprint' and r.proposed %}<br><a href="/preview?fp={{ r.proposed|urlencode }}" target=_blank title="打开预览"><img src="/footprints/preview.svg?name={{ r.proposed|urlencode }}" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;margin-top:4px" onerror="this.remove()"></a>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
 <td class="act-{{ r.action }}">{{ r.action }}</td><td class=mute>{{ r.method }}</td>
 <td style="white-space:nowrap">{% if r.review_status=='pending' %}<form class=inline method=post action="/review/{{ r.id }}/approve?next={{ next|urlencode }}"><button class=ok>通过</button></form> <form class=inline method=post action="/review/{{ r.id }}/reject?next={{ next|urlencode }}"><button class=bad>驳回</button></form>
 {% elif r.review_status=='auto' %}<form class=inline method=post action="/review/{{ r.id }}/revert?next={{ next|urlencode }}"><button class=bad>撤销</button></form>{% else %}<span class=mute>{{ r.reviewed_by }}</span>{% endif %}</td>
@@ -1366,6 +1366,15 @@ def symbol_file_svg(sha256: str, user: str = Depends(auth)):
     if not sym:
         raise HTTPException(404)
     return HTMLResponse(render_svg(sym), media_type="image/svg+xml", headers={"Cache-Control": "private, max-age=86400"})
+
+
+@app.get("/symbols/preview.svg")
+def symbol_svg(name: str, user: str = Depends(auth)):
+    """KiCad 库符号缩略图（名字如 Diode:BZX84Cxx）。"""
+    svg = previews.symbol_svg_by_name(name)
+    if not svg:
+        raise HTTPException(404)
+    return HTMLResponse(svg, media_type="image/svg+xml", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @app.get("/footprints/preview.svg")

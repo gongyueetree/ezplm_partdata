@@ -488,6 +488,10 @@ PKG_PIN_RE = re.compile(r"(?:^|[-_])(\d{1,3})(?:[-_]|$)")
 
 def expected_pins_from_footprint(fp_name: str) -> int | None:
     """从 KiCad 封装名猜引脚数：SOIC-16_..., QFN-32-1EP_..., SOT-23-6, TO-252-2。"""
+    # SOT-23 / SOT-223 / SC-70 / SOD-123 / TO-220 这类封装名里的数字是型号不是引脚数：只认后面再跟的 "-N"（SOT-23-3、TO-220-2）
+    m = re.match(r"^(SOT|SC|SOD|TO|DO|SMA|SMB|SMC|DPAK|D2PAK|PowerPAK)-?\d+[A-Z]*(?:-(\d{1,2}))?(?:[_-]|$)", fp_name or "", re.I)
+    if m:
+        return int(m.group(2)) if m.group(2) else None
     m = re.match(r"^[A-Za-z]+[A-Za-z0-9]*?-(\d{1,3})(?:-\d+EP)?(?:[_-]|$)", fp_name or "")
     return int(m.group(1)) if m else None
 
@@ -509,7 +513,23 @@ def qa_symbol(cand: dict, part: Part, index: LibIndex) -> dict:
         issues.append("符号默认封装与器件封装不一致（可能是同系列不同封装）")
     if cand["pin_count"] == 0:
         issues.append("符号无引脚（可能是派生符号未解析到根）")
-    return {"ok": not issues, "issues": issues, "checks": checks}
+    # 描述里的封装/引脚数（"齐纳二极管阵列 SOT363"、"SOT-23, 5 PIN"）和符号引脚数明显对不上 → 不出建议
+    from .packages import ARRAY_WORDS, find_package, pins_in_text
+    text = f"{part.description} {part.description_en}"
+    dn = pins_in_text(text) or expected_pins_from_footprint(DESC_PKG_PINS.get(find_package(text).upper().replace("-", ""), find_package(text)))
+    checks["expected_pins_from_desc"] = dn
+    reject = []
+    if dn and cand["pin_count"] and abs(cand["pin_count"] - dn) > 1:
+        reject.append(f"符号引脚数 {cand['pin_count']} ≠ 描述封装引脚数 {dn}")
+    if ARRAY_WORDS.search(text) and cand["pin_count"] and cand["pin_count"] <= 3:
+        reject.append("描述是阵列/多元件，符号只有单个元件")
+    issues += reject
+    return {"ok": not issues, "issues": issues, "checks": checks, "reject": bool(reject)}
+
+
+# 描述里常见的不带引脚数的封装叫法 → 引脚数可推的 KiCad 叫法
+DESC_PKG_PINS = {"SOT363": "SOT-363-6", "SOT353": "SOT-353-5", "SOT323": "SOT-323-3", "SOT23": "SOT-23-3", "SOT523": "SOT-523-3",
+                 "SOT563": "SOT-563-6", "SOD123": "SOD-123-2", "SOD323": "SOD-323-2", "SOD523": "SOD-523-2", "SMA": "SMA-2", "SMB": "SMB-2", "SMC": "SMC-2"}
 
 
 def propose_footprints_by_mpn(parts: Iterable[Part], index: LibIndex, auto_min: float = 0.85) -> Iterator[Proposal]:
@@ -538,6 +558,8 @@ def propose_symbols(parts: Iterable[Part], index: LibIndex, auto_min: float = 0.
             continue
         best = cands[0]
         qa = qa_symbol(best, p, index)
+        if qa.get("reject"):                 # 描述明确对不上（如双齐纳 SOT363 配单管符号）：不出建议
+            continue
         conf = best["score"] if qa["ok"] else round(best["score"] * 0.5, 3)
         if len(cands) > 1 and cands[1]["symbol"] == best["symbol"]:
             conf = min(0.99, conf + 0.05)   # 多来源一致

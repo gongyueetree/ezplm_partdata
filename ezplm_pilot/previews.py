@@ -52,8 +52,9 @@ def symbol_by_sha(db, sha: str) -> dict | None:
     return pv
 
 
-def symbol_by_name(name: str) -> dict | None:
-    """扫描过的 KiCad 符号库里按名字找（名字可带 "库:" 前缀）。KiCad 9+ 的 .kicad_symdir 每个符号一个文件，extends 的父符号一起读。"""
+def _symbol_text(name: str) -> tuple[str, str, str] | None:
+    """扫描过的 KiCad 符号库里按名字找（名字可带 "库:" 前缀，如 Diode:BZX84Cxx）→ (库文本, 符号名, 库名)。
+    KiCad 9+ 的 .kicad_symdir 每个符号一个文件，extends 的父符号一起读。"""
     lib, _, nm = (name or "").rpartition(":")
     con = _idx()
     if not con or not nm:
@@ -74,11 +75,22 @@ def symbol_by_name(name: str) -> dict | None:
         if texts:
             # 多个文件拼成一个库：去掉各自的外层 (kicad_symbol_lib … ) 只留 symbol 块
             body = "".join(t[t.find("(symbol"):t.rstrip().rfind(")")] for t in texts)
-            pv = symrender.preview(f"(kicad_symbol_lib {body})", nm)
-            if pv:
-                pv["source"] = f"KiCad 库 {lb}"
-                return pv
+            return f"(kicad_symbol_lib {body})", nm, lb
     return None
+
+
+def symbol_by_name(name: str) -> dict | None:
+    got = _symbol_text(name)
+    pv = symrender.preview(got[0], got[1]) if got else None
+    if pv:
+        pv["source"] = f"KiCad 库 {got[2]}"
+    return pv
+
+
+def symbol_svg_by_name(name: str) -> str | None:
+    got = _symbol_text(name)
+    sym = symrender.load(got[0], got[1]) if got else None
+    return symrender.render_svg(sym) if sym else None
 
 
 # --------------------------------------------------------------------------- 封装 / 3D
@@ -145,12 +157,12 @@ def for_part(db, p, props) -> dict:
     order = {"approved": 0, "auto": 1, "pending": 2}
     for r in sorted(sym_props, key=lambda r: (order[r.review_status], -(r.confidence or 0))):
         ev = json.loads(r.evidence_json or "{}")
-        if ev.get("sha256"):
-            pv = symbol_by_sha(db, ev["sha256"])
-            if pv:
-                pv.update(value=r.proposed, status={"approved": "已通过", "auto": "已自动写入", "pending": "建议（待复核）"}[r.review_status])
-                out["symbol"] = pv
-                break
+        # 导入的符号文件按 SHA 取；KiCad 库建议（如 Diode:BZX84Cxx）按名字到扫描过的库里取
+        pv = symbol_by_sha(db, ev["sha256"]) if ev.get("sha256") else symbol_by_name(r.proposed)
+        if pv:
+            pv.update(value=r.proposed, status={"approved": "已通过", "auto": "已自动写入", "pending": "建议（待复核）"}[r.review_status])
+            out["symbol"] = pv
+            break
     if not out["symbol"]:
         for val, st in ((p.new_symbol, "新值"), (p.orig_symbol, "ezPLM 现值")):
             if val:
