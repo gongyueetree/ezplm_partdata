@@ -117,6 +117,9 @@ lineage:
   - {from: "PERICOM SEMICONDUCTOR CORP", to: "Diodes Inc", conf: A, note: "2015 Diodes收购"}
   - {from: "SARONIX", to: "Diodes Inc", conf: A, note: "Pericom→Diodes"}
   - {from: "ZETEX PLC", to: "Diodes Inc", conf: A, note: "2008 Diodes收购"}
+  - {from: "BCD SEMICONDUCTOR MANUFACTURING LTD", match: "^BCD\\s*SEMI|新进半导体|上海新进", to: "Diodes Inc", conf: A, note: "2013 Diodes收购（AP/AS/AZ 系列沿用原型号）"}
+  - {from: "ANACHIP CORP", to: "Diodes Inc", conf: A, note: "2006 Diodes收购"}
+  - {from: "ZETEX SEMICONDUCTORS", to: "Diodes Inc", conf: A, note: "2008 Diodes收购"}
   - {from: "COOPER ELECTRONIC TECHNOLOGIES", to: "Eaton", conf: A, note: "2012 Eaton收购"}
   - {from: "COOPER INDUSTRIES", to: "Eaton", conf: A, note: "2012 Eaton收购"}
   - {from: "HON HAI PRECISION INDUSTRY CO LTD", to: "Foxconn Interconnect (FIT)", conf: C, note: "连接器业务归FIT"}
