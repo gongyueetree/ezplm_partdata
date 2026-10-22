@@ -67,6 +67,10 @@ def package_text(sp: StagedPart) -> str:
         a = json.loads(sp.attributes_json or "{}")
     except ValueError:
         return ""
+    if isinstance(a, list):                       # ezPLM 详情接口的属性是 [{name, value}] 列表（处理时拉回来的就是这种）
+        a = {x.get("name") or x.get("key") or "": x.get("value") for x in a if isinstance(x, dict)}
+    if not isinstance(a, dict):
+        return ""
     return next((str(v) for k, v in a.items() if k and ("封装" in k or k.lower() in ("package", "package / case", "封装/外壳"))), "") or ""
 
 
