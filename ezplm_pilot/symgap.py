@@ -248,7 +248,8 @@ def recheck_generic(db, rules: GenericRules | None = None, log=print) -> dict:
             else:
                 st["rejected"] += 1
             pr.review_status, pr.review_note, pr.reviewed_at = "rejected", "recheck: 通用符号规则已不再适用", _dt.utcnow()
-            sp.tags = ",".join(t for t in (sp.tags or "").split(",") if t and t not in ("通用符号", "符号自动匹配")) or None
+            sp.tags = ",".join(t for t in (sp.tags or "").split(",")
+                               if t and t not in ("通用符号", "符号自动匹配", "引脚不一致", "引脚待确认", "引脚一致", "可换EP封装")) or None
         db.commit()
         log(f"  已复查 {st['checked']}：保留 {st['kept']}，撤销自动写入 {st['reverted']}，驳回 {st['rejected']}")
     return st

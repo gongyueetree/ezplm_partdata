@@ -133,7 +133,14 @@ def run_all(stop=None, log=None, progress=None) -> dict:
     base = select(StagedPart).where(or_(StagedPart.id.in_(with_sym), StagedPart.new_symbol.isnot(None)))
     from sqlalchemy import func
     total = db.execute(select(func.count()).select_from(base.subquery())).scalar() or 0
-    log(f"待核对物料 {total} 条")
+    # 先清掉"已经没有符号"的物料身上的旧核对标签（如通用符号被撤销后，上一轮打的「引脚不一致」还留着）
+    stale = 0
+    for sp in db.execute(select(StagedPart).where(or_(*[StagedPart.tags.contains(t) for t in list(TAGS.values()) + ["可换EP封装"]]),
+                                                  StagedPart.id.notin_(base.with_only_columns(StagedPart.id)))).scalars():
+        sp.tags = ",".join(t for t in (sp.tags or "").split(",") if t and t not in TAGS.values() and t != "可换EP封装") or None
+        stale += 1
+    db.commit()
+    log(f"待核对物料 {total} 条；清掉已无符号物料上的旧核对标签 {stale} 条")
     st = {"checked": 0, "err": 0, "warn": 0, "ok": 0, "no_data": 0, "ep_fix": 0}
     last = ""
     while not (stop and stop()):
@@ -153,7 +160,7 @@ def run_all(stop=None, log=None, progress=None) -> dict:
                 log(f"  ! {sp.mpn}: {str(e)[:120]}")
                 continue
             st["checked"] += 1
-            sp.tags = ",".join(t for t in (sp.tags or "").split(",") if t and t not in TAGS.values()) or None
+            sp.tags = ",".join(t for t in (sp.tags or "").split(",") if t and t not in TAGS.values() and t != "可换EP封装") or None
             if not pc["worst"]:
                 st["no_data"] += 1
                 continue
