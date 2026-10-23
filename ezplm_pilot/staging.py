@@ -37,14 +37,14 @@ class StagedPart(Base):
     orig_footprint_lib = Column(String(100))
     orig_has_pdf = Column(Boolean, default=False)
     orig_has_image = Column(Boolean, default=False)
-    orig_url = Column(String(500))
+    orig_url = Column(Text)                            # ezPLM 官网链接偶有很长的（淘宝商品链接带跟踪参数 > 500 字符）
     # 新值（自动写入或复核通过后才有）
     new_category_id = Column(String(40), index=True)
     new_category = Column(String(200))
     new_symbol = Column(String(200))
     new_footprint = Column(String(200))
-    new_url = Column(String(500))
-    new_datasheet = Column(String(500))
+    new_url = Column(Text)
+    new_datasheet = Column(Text)
     new_description_en = Column(Text)
     new_manufacturer = Column(String(200))             # 只作提示：回写只填空，不会覆盖 ezPLM 已有制造商
     # IHS 参考数据匹配结果（ihs.py）
@@ -317,7 +317,14 @@ def _migrate(eng):
                 c.exec_driver_sql('ALTER TABLE category_params RENAME COLUMN "values" TO vals')
     except Exception:  # noqa
         pass
-    cols = {c["name"] for c in inspect(eng).get_columns("parts")}
+    pcols = inspect(eng).get_columns("parts")
+    cols = {c["name"] for c in pcols}
+    if eng.dialect.name == "postgresql":           # 链接列从 VARCHAR(500) 放宽成 TEXT（SQLite 不限长度，不用改）
+        narrow = [c["name"] for c in pcols if c["name"] in ("orig_url", "new_url", "new_datasheet") and getattr(c["type"], "length", None)]
+        if narrow:
+            with eng.begin() as c:
+                for name in narrow:
+                    c.exec_driver_sql(f"ALTER TABLE parts ALTER COLUMN {name} TYPE TEXT")
     missing = {k: v for k, v in _NEW_PART_COLUMNS.items() if k not in cols}
     if missing:
         with eng.begin() as c:
