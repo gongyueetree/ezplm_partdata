@@ -304,15 +304,15 @@ REVIEW = """{% extends "base" %}{% block topright %}<a class=btn href="/review/g
 <select name=action><option value="">— 动作 —</option>{% for v in ['flag_mismatch','review'] %}<option {{ 'selected' if action==v }}>{{ v }}</option>{% endfor %}</select>
 <select name=status><option value=pending {{ 'selected' if status=='pending' }}>待复核</option><option value=auto {{ 'selected' if status=='auto' }}>自动写入（抽检）</option><option value=approved {{ 'selected' if status=='approved' }}>已通过</option><option value=rejected {{ 'selected' if status=='rejected' }}>已驳回</option></select>
 <input name=minconf value="{{ minconf }}" placeholder="最低置信度" style="width:110px">
-<input name=mfr value="{{ mfr }}" placeholder="厂商（包含）" style="width:150px"><input name=proposed value="{{ proposed if proposed is not none else '' }}" placeholder="建议值（完全相同）" style="width:200px">
+<input name=mfr value="{{ mfr }}" placeholder="厂商（包含）" style="width:150px"><input name=method value="{{ method }}" placeholder="方法（前缀）" style="width:150px" title="如 kicad:kicad-official:wildcard、generic-symbol、symset"><input name=tag value="{{ tag }}" placeholder="物料标签" style="width:110px" title="如 引脚不一致"><input name=proposed value="{{ proposed if proposed is not none else '' }}" placeholder="建议值（完全相同）" style="width:200px">
 {% if cat %}<input type=hidden name=cat value="{{ cat }}"><span class=tag title="{{ cat_label }}">分类：{{ cat_label.split(' > ')[-1] }}</span>{% endif %}
 {% if current is not none %}<input type=hidden name=current value="{{ current }}">{% endif %}{% if rule is not none %}<input type=hidden name=rule value="{{ rule }}">{% endif %}
-<button class=pri>筛选</button><span class=mute>共 {{ total }} 条</span>{% if mfr or cat or proposed is not none %} <a href="/review?field={{ field }}&status={{ status }}">清除筛选</a>{% endif %}</form>
+<button class=pri>筛选</button><span class=mute>共 {{ total }} 条</span>{% if mfr or cat or method or tag or proposed is not none %} <a href="/review?field={{ field }}&status={{ status }}">清除筛选</a>{% endif %}</form>
 {% if narrowed and status=='pending' and total %}<div class=filters style="background:#eef2ff;padding:8px 10px;border-radius:8px">
 <span>按当前筛选整批处理（共 <b>{{ total }}</b> 条，不止本页）：</span>
 {% for d, lab, cls in [('approve','全部通过','ok'),('reject','全部驳回','bad')] %}<form class=inline method=post action="/review/filter-apply" onsubmit="return confirm('{{ lab }}筛选出的 {{ total }} 条建议？')">
 <input type=hidden name=decision value={{ d }}><input type=hidden name=field value="{{ field }}"><input type=hidden name=action value="{{ action }}"><input type=hidden name=minconf value="{{ minconf }}">
-<input type=hidden name=mfr value="{{ mfr }}"><input type=hidden name=cat value="{{ cat }}"><input type=hidden name=next value="{{ next }}">
+<input type=hidden name=mfr value="{{ mfr }}"><input type=hidden name=cat value="{{ cat }}"><input type=hidden name=method value="{{ method }}"><input type=hidden name=tag value="{{ tag }}"><input type=hidden name=next value="{{ next }}">
 {% if proposed is not none %}<input type=hidden name=proposed value="{{ proposed }}"><input type=hidden name=proposed_set value=1>{% endif %}
 {% if current is not none %}<input type=hidden name=current value="{{ current }}"><input type=hidden name=current_set value=1>{% endif %}
 {% if rule is not none %}<input type=hidden name=rule value="{{ rule }}"><input type=hidden name=rule_set value=1>{% endif %}
@@ -941,10 +941,11 @@ def part_set_footprint(pid: str, footprint: str = Form(...), user: str = Depends
 @app.get("/review", response_class=HTMLResponse)
 def review_queue(request: Request, field: str = "", action: str = "", status: str = "pending", minconf: str = "", page: int = 1, size: int = 50,
                  current: str | None = None, proposed: str | None = None, rule: str | None = None, mfr: str = "", cat: str = "",
-                 user: str = Depends(auth)):
+                 method: str = "", tag: str = "", user: str = Depends(auth)):
     db = get_session()
     proposed = proposed if proposed not in ("",) else None
-    f = dict(field=field, action=action, minconf=minconf, current=current, proposed=proposed, rule=rule, mfr=mfr.strip(), cat=cat)
+    f = dict(field=field, action=action, minconf=minconf, current=current, proposed=proposed, rule=rule, mfr=mfr.strip(), cat=cat,
+             method=method.strip(), tag=tag.strip())
     stmt = pipeline.review_stmt([StagedProposal, StagedPart], status=status, **f)
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar()
     rows = db.execute(stmt.order_by(StagedProposal.confidence.desc(), StagedPart.value_score.desc()).offset((page - 1) * size).limit(size)).all()
@@ -953,11 +954,11 @@ def review_queue(request: Request, field: str = "", action: str = "", status: st
         r.current_label = tax.path(r.current) if (r.field == "category_id" and r.current in tax.nodes) else ""
         p.cat_id = p.new_category_id or p.orig_category_id or ""
     from urllib.parse import quote
-    qs = f"field={field}&action={action}&status={status}&minconf={minconf}&mfr={quote(mfr)}&cat={quote(cat)}" + (f"&current={quote(current)}" if current is not None else "") \
+    qs = f"field={field}&action={action}&status={status}&minconf={minconf}&mfr={quote(mfr)}&cat={quote(cat)}&method={quote(method)}&tag={quote(tag)}" + (f"&current={quote(current)}" if current is not None else "") \
         + (f"&proposed={quote(proposed)}" if proposed is not None else "") + (f"&rule={quote(rule)}" if rule is not None else "")
-    narrowed = bool(field and (mfr or proposed is not None or cat or rule is not None or current is not None))   # 只有收窄过的筛选才给"整批"按钮
+    narrowed = bool(field and (mfr or proposed is not None or cat or rule is not None or current is not None or method or tag))   # 只有收窄过的筛选才给"整批"按钮
     return render("review", request, title="复核队列", nav="review", user=user, rows=rows, total=total, page=page, size=size, field=field, action=action,
-                  status=status, minconf=minconf, mfr=mfr, cat=cat, cat_label=tax.path(cat) if cat in tax.nodes else cat, proposed=proposed,
+                  status=status, minconf=minconf, mfr=mfr, cat=cat, method=method, tag=tag, cat_label=tax.path(cat) if cat in tax.nodes else cat, proposed=proposed,
                   current=current, rule=rule, narrowed=narrowed, qs=qs, next=f"/review?{qs}&page={page}")
 
 

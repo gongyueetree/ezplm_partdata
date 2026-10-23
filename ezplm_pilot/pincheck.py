@@ -44,10 +44,15 @@ def chip_info(db, sp) -> dict:
 
 
 def check(chip: dict, sym_nums: set | None, fp: dict | None) -> list[tuple[str, str]]:
-    """sym_nums：符号引脚编号集合；fp：fprender.preview 的结果（numbers / ep / name）。"""
+    """sym_nums：符号引脚编号集合；fp：fprender.preview 的结果（numbers / ep / name）。
+    级别：符号引脚在封装里找不到焊盘 = err（一定接不上）；封装多出的焊盘 = warn（常是 NC 脚或散热焊盘）；
+    器件脚数（IHS/描述）对不上：符号和封装本身也对不上时 = err，符号和封装一致时只 warn（描述"40 pins"、IHS 电阻网络"1 脚"这类说法常不准）。"""
     res = []
     fp_all = set(fp["numbers"]) if fp and fp.get("numbers") else None
     ep = set(fp.get("ep") or []) if fp else set()
+    if sym_nums:
+        ep -= sym_nums                      # 符号接了的大焊盘是功能脚（TO-252 散热片 = VCC/漏极），不算 EP
+    agree = bool(sym_nums) and fp_all is not None and sym_nums == fp_all
     if sym_nums and fp_all is not None:
         miss = sym_nums - fp_all
         extra = fp_all - sym_nums
@@ -56,21 +61,22 @@ def check(chip: dict, sym_nums: set | None, fp: dict | None) -> list[tuple[str, 
         if extra and extra <= ep:
             res.append(("warn", f"封装散热焊盘 {_fmt(extra)} 符号里没有引脚（通常应接地：符号加 EP 引脚，或确认可悬空）"))
         elif extra:
-            res.append(("err", f"封装焊盘 {_fmt(extra)} 符号里没有对应引脚"))
+            res.append(("warn", f"封装焊盘 {_fmt(extra)} 符号里没有对应引脚（若是 NC 脚可忽略，否则符号或封装不对）"))
         if not miss and not extra:
             res.append(("ok", f"符号引脚与封装焊盘编号一致（{len(sym_nums)}）"))
-    if chip.get("pins") and fp_all is not None:
+    pins = chip.get("pins") if (chip.get("pins") or 0) >= 2 else None      # IHS 偶有"1 脚"之类无意义的值
+    if pins and fp_all is not None:
         sig = len(fp_all - ep)
-        if sig != chip["pins"]:
-            res.append(("err", f"器件 {chip['pins']} 脚（{chip['src']}），封装信号焊盘 {sig} 个"))
+        if sig != pins:
+            res.append(("warn" if agree else "err", f"器件 {pins} 脚（{chip['src']}），封装信号焊盘 {sig} 个"))
         else:
             res.append(("ok", f"封装信号焊盘数与器件一致（{sig}，来自{chip['src']}）"))
     if chip.get("ep") and fp_all is not None and not ep:
         res.append(("warn", "器件带裸露焊盘（EP），封装里没有散热焊盘"))
-    if chip.get("pins") and sym_nums:
+    if pins and sym_nums and not agree:
         n = len(sym_nums - ep)
-        if n not in (chip["pins"], chip["pins"] + 1):                 # +1：符号里画了 EP 引脚
-            res.append(("warn", f"器件 {chip['pins']} 脚（{chip['src']}），符号 {len(sym_nums)} 个引脚"))
+        if n not in (pins, pins + 1):                                    # +1：符号里画了 EP 引脚
+            res.append(("warn", f"器件 {pins} 脚（{chip['src']}），符号 {len(sym_nums)} 个引脚"))
     return res
 
 

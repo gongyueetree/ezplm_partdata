@@ -665,11 +665,11 @@ def review_group(field: str, current: str, proposed: str, decision: str, action:
     return {"decision": decision, "field": field, "rule": rule, "done": done, "total": total}
 
 
-REVIEW_FILTERS = ("field", "action", "minconf", "current", "proposed", "rule", "mfr", "cat")
+REVIEW_FILTERS = ("field", "action", "minconf", "current", "proposed", "rule", "mfr", "cat", "method", "tag")
 
 
 def review_stmt(cols, status: str = "pending", field: str = "", action: str = "", minconf=None, current=None, proposed=None,
-                rule=None, mfr=None, cat=None):
+                rule=None, mfr=None, cat=None, method=None, tag=None):
     """复核队列的筛选（列表页和"按筛选整批通过/驳回"共用一套条件）。
     mfr：厂商名包含；cat：物料分类（新分类或原分类）等于。"""
     stmt = select(*cols).join(StagedPart, StagedPart.id == StagedProposal.part_id).where(StagedProposal.review_status == status,
@@ -688,6 +688,10 @@ def review_stmt(cols, status: str = "pending", field: str = "", action: str = ""
         stmt = stmt.where(StagedPart.manufacturer.ilike(f"%{mfr}%"))
     if cat:
         stmt = stmt.where(func.coalesce(StagedPart.new_category_id, StagedPart.orig_category_id) == cat)
+    if method:                                   # 方法前缀，如 kicad:kicad-official:wildcard、generic-symbol、symset
+        stmt = stmt.where(StagedProposal.method.like(method + "%"))
+    if tag:                                      # 物料标签，如 引脚不一致
+        stmt = stmt.where(StagedPart.tags.contains(tag))
     return rule_filter(stmt, rule)
 
 
