@@ -413,7 +413,7 @@ def ihs_match(batch: int = 500, job: str | None = None, only_matched: bool = Tru
 
 
 # 不是 ② 处理生成的建议（三批符号导入、符号仓库匹配、开源工程、通用符号）：重新处理不会再生成，所以重跑时不能作废
-EXTERNAL_METHODS = ("symset", "symmatch", "oshw", "generic-symbol")
+EXTERNAL_METHODS = ("symset", "symmatch", "oshw", "generic-symbol", "symshare")
 
 
 def _regenerated():
