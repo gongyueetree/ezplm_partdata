@@ -2,6 +2,7 @@
 # path：分类路径正则（"一级 > 二级 > …"，new 优先于 orig）；desc：可选，描述/型号再过滤；pins：允许的引脚数（空 = 不限/未知也可）；
 # symbol：KiCad 库:符号名，{n} 换成引脚数、{n2} 换成引脚数/2（双排）；conf：建议置信度。按顺序取第一条命中。
 # unknown: true 表示拿不到引脚数时也按通用处理（置信度 -0.05）；没有该标记时引脚数未知就算专用。
+# 引脚数按封装焊盘数算：TO-252-2/TO-263-2（DPAK/D2PAK）是 2 引线 + 散热片 = 3 个焊盘，不套两脚符号（单管极性随型号，走专用）。
 # 不在这里的分类一律算"专用"（specific），走 symmatch 型号匹配。
 rules:
   # ---------------- 电阻 / 电位器
@@ -35,10 +36,10 @@ rules:
   - {path: "单 FET，MOSFET", desc: "P ?沟道|P-?Channel|P型|PMOS", exclude: "N ?沟道|N-?Channel|双|Dual|互补", mpn: "^(BSS84|AO34[0-2]\\d|SI23\\d{2}|IRLML\\d|NTR\\d{4}|PMV\\d{2}|DMG(23|34)|DMP\\d{2,4}|FDN3\\d{2}|FDV30\\d)",
      pkg: "(?<![A-Za-z0-9])SOT-?23(-3)?(?![-\\d])", pins: [3], symbol: "platform:Q_PMOS_GSD", conf: 0.86}
   # ---------------- 两脚二极管 / LED（多脚、阵列的走专用）
-  - {path: "^分立半导体产品 > 二极管", desc: "肖特基|Schottky", pins: [2], symbol: "Device:D_Schottky", conf: 0.88}
-  - {path: "^分立半导体产品 > 二极管", desc: "齐纳|稳压|Zener", pins: [2], symbol: "Device:D_Zener", conf: 0.88}
-  - {path: "^分立半导体产品 > 二极管", desc: "TVS|瞬态", pins: [2], symbol: "Device:D_TVS", conf: 0.85}
-  - {path: "^分立半导体产品 > 二极管", pins: [2], symbol: "Device:D", conf: 0.85}
+  - {path: "^分立半导体产品 > 二极管(?!.*(阵列|桥))", desc: "肖特基|Schottky", exclude: "阵列|双|Dual|共阴|共阳|Array|桥", pins: [2], symbol: "Device:D_Schottky", conf: 0.88}
+  - {path: "^分立半导体产品 > 二极管(?!.*(阵列|桥))", desc: "齐纳|稳压|Zener", exclude: "阵列|双|Dual|共阴|共阳|Array|桥", pins: [2], symbol: "Device:D_Zener", conf: 0.88}
+  - {path: "^分立半导体产品 > 二极管(?!.*(阵列|桥))", desc: "TVS|瞬态", exclude: "阵列|双|Dual|共阴|共阳|Array|桥", pins: [2], symbol: "Device:D_TVS", conf: 0.85}
+  - {path: "^分立半导体产品 > 二极管(?!.*(阵列|桥))", exclude: "阵列|双|Dual|共阴|共阳|Array|桥", pins: [2], symbol: "Device:D", conf: 0.85}
   - {path: "^光电器件 > LED 发射器", pins: [2], symbol: "Device:LED", conf: 0.88}
   # ---------------- 排针 / 排母（单排按引脚数；双排要求封装或描述里写明 2xNN）
   - {path: "^连接器，互连器件 > (排针|排母)", desc: "2[xX×*]\\d+|双排", pins: [], symbol: "Connector_Generic:Conn_02x{n2}_Odd_Even", conf: 0.8}

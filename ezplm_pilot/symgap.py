@@ -37,6 +37,7 @@ _FIXED = [(re.compile(p.replace(r"\b", "(?<![A-Za-z0-9])", 1).replace(r"\b", "(?
     (r"\b(?:TO|SOT|SC|DO)-?\d{2,3}[A-Z]{0,2}-(\d{1,2})\b", None), (r"\bSOT-?23-?(\d)\b", None), (r"\bSOT-?23\b|\bSOT-?323\b|\bSOT-?416\b|\bSOT-?523\b|\bSC-?70\b(?!-)|\bTO-?92\b|\bSOT-?89\b|\bTO-?220(?!-\d)\b|\bTO-?247(?!-\d)\b", 3),
     (r"\bSOT-?223\b", 4), (r"\bTO-?252\b|\bDPAK\b|\bTO-?263\b|\bD2PAK\b", 3), (r"\bSOT-?363\b|\bSC-?70-?6\b|\bSC-?88\b", 6), (r"\bSOT-?353\b|\bSC-?70-?5\b", 5),
 ]]
+_TAB_SMD = re.compile(_B + r"(?:TO-?252|TO-?263|TO-?268|D2?PAK)-(\d)(?![\d.])", re.I)
 _FAMILY_N = re.compile(_B + r"[A-Z]*(?:SOIC|SOP|SSOP|TSSOP|MSOP|QSOP|VSSOP|HTSSOP|DIP|PDIP|QFN|VQFN|WQFN|DFN|TDFN|SON|VSON|WSON|QFP|LQFP|TQFP|PLCC|BGA|LGA|CSP|WLCSP|HSOP|TQFN|UQFN|USON|X2SON|PowerPAK|HVQFN)[-_ ]?(\d{1,4})(?!\d)", re.I)
 
 
@@ -49,6 +50,9 @@ def pin_count(text: str) -> int | None:
         return int(m.group(1)) * int(m.group(2))
     if _TWO_TERM.match(t) or _TWO_PKG.search(t) or (_CHIP_SIZE.search(t) and len(t) <= 30 and not _FAMILY_N.search(t)):
         return 2
+    m = _TAB_SMD.search(t)
+    if m:                                         # TO-252-2 / TO-263-2（DPAK/D2PAK）：名字里的 2 是引线数，散热片是第 3 个焊盘（KiCad 编号 2）
+        return int(m.group(1)) + 1
     for rx, n in _FIXED:
         m = rx.search(t)
         if m:
@@ -209,11 +213,53 @@ def platform_symbol(db, name: str) -> dict:
     return _platform_cache[name]
 
 
+def recheck_generic(db, rules: GenericRules | None = None, log=print) -> dict:
+    """按当前规则复查已有的通用符号建议：不再命中、或命中的符号不同的 → 待复核的驳回，已自动写入的撤销（new_symbol 清空），
+    这样改了规则（如 TO-263-2 不是 2 脚、二极管阵列不用单管符号）以后，之前误写的能一键撤回。"""
+    from datetime import datetime as _dt
+    from .pipeline import load_taxonomy
+    rules = rules or GenericRules()
+    tax = load_taxonomy(db)
+    st = {"checked": 0, "kept": 0, "rejected": 0, "reverted": 0}
+    last = 0
+    while True:
+        prs = db.execute(select(StagedProposal).where(StagedProposal.method == "generic-symbol", StagedProposal.review_status.in_(("auto", "pending")),
+                                                      StagedProposal.id > last).order_by(StagedProposal.id).limit(2000)).scalars().all()
+        if not prs:
+            break
+        last = prs[-1].id
+        parts = {sp.id: sp for sp in db.execute(select(StagedPart).where(StagedPart.id.in_({p.part_id for p in prs}))).scalars()}
+        for pr in prs:
+            sp = parts.get(pr.part_id)
+            if not sp:
+                continue
+            st["checked"] += 1
+            cid = sp.new_category_id or sp.orig_category_id or ""
+            path = tax.path(cid) if cid else (sp.new_category or sp.orig_category or "")
+            pkg = package_text(sp)
+            g = rules.match(path, f"{sp.mpn or ''} {sp.description or ''} {sp.description_en or ''} {pkg}", pin_count(pkg), sp.mpn or "", pkg)
+            if g and g[0] == pr.proposed_label:
+                st["kept"] += 1
+                continue
+            if pr.review_status == "auto":
+                if sp.new_symbol == pr.proposed:
+                    sp.new_symbol = None
+                st["reverted"] += 1
+            else:
+                st["rejected"] += 1
+            pr.review_status, pr.review_note, pr.reviewed_at = "rejected", "recheck: 通用符号规则已不再适用", _dt.utcnow()
+            sp.tags = ",".join(t for t in (sp.tags or "").split(",") if t and t not in ("通用符号", "符号自动匹配")) or None
+        db.commit()
+        log(f"  已复查 {st['checked']}：保留 {st['kept']}，撤销自动写入 {st['reverted']}，驳回 {st['rejected']}")
+    return st
+
+
 def propose_generic(db, auto_min: float = 0.85, job: str | None = None, log=print) -> dict:
     """给"通用"类缺符号物料直接出符号建议（KiCad 官方通用符号），作废同一方法上一轮未复核的建议。"""
     from .ezplm_lib import EzLibrary
     from .pipeline import _save_proposals, load_taxonomy
     job = job or f"symgeneric-{datetime.utcnow():%Y%m%d-%H%M}"
+    log(f"先按当前规则复查已有通用符号：{recheck_generic(db, log=log)}")
     tax, ezlib = load_taxonomy(db), EzLibrary(db)
     stats = {"job": job, "proposals": 0, "auto_fill": 0, "flag_mismatch": 0, "review": 0}
     batch, staged = [], {}
