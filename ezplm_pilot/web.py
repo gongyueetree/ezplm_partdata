@@ -110,7 +110,7 @@ pre{white-space:pre-wrap;word-break:break-all;background:#0f172a;color:#e2e8f0;p
 </style></head><body>
 <aside><div class=brand><i></i>暂存数据平台</div>
 <div class=grp>概览</div><a href="/" class="{{ 'on' if nav=='home' }}">工作台</a><a href="/jobs" class="{{ 'on' if nav=='jobs' }}">任务控制</a>
-<div class=grp>数据</div><a href="/parts" class="{{ 'on' if nav=='parts' }}">物料信息</a><a href="/categories" class="{{ 'on' if nav=='categories' }}">分类</a><a href="/library" class="{{ 'on' if nav=='library' }}">符号 / 封装库</a>
+<div class=grp>数据</div><a href="/parts" class="{{ 'on' if nav=='parts' }}">物料信息</a><a href="/categories" class="{{ 'on' if nav=='categories' }}">分类</a><a href="/library" class="{{ 'on' if nav=='library' }}">符号 / 封装库</a><a href="/companies" class="{{ 'on' if nav=='companies' }}">制造商整理</a>
 <div class=grp>治理</div><a href="/review" class="{{ 'on' if nav=='review' }}">复核队列</a><a href="/export" class="{{ 'on' if nav=='export' }}">回写 ezPLM</a>
 <div class=grp>系统</div><a href="/settings" class="{{ 'on' if nav=='settings' }}">设置</a>
 <div style="margin-top:20px;padding:0 10px" class=mute>时间均为{{ tz_label }}<br>{{ user }}{% if busy %}<br><span class=status-running>● 任务运行中</span>{% endif %}</div></aside>
@@ -562,8 +562,59 @@ for (const box of document.querySelectorAll(".pv3d[data-model]")) {
 
 PREVIEWPAGE = """{% extends "base" %}{% import "preview" as P %}{% block body %}{{ P.cards(pv) }}{% endblock %}{% block script %}{% if pv.footprint and pv.footprint.model %}{{ P.script() }}{% endif %}{% endblock %}"""
 
+COMPANIES = """{% extends "base" %}{% block topright %}<a class=btn href="/companies/export.csv">导出 CSV</a>{% endblock %}{% block body %}
+<div class=cards>{% for k, lab in [('primary','厂商（去重后）'),('dups','疑似重复记录'),('with_parts','有物料的'),('no_website','缺官网'),('checked','已检查官网'),('ok','官网正常'),('blocked','站点在但拦脚本'),('dead','打不开'),('redirect_other','跳到别家'),('acquired','建议：已被并购'),('approved','已通过')] %}
+<div class=card><div class=n>{{ s[k] }}</div><div class=l>{{ lab }}</div></div>{% endfor %}</div>
+<div class=panel><h2>整理步骤</h2>
+<form class=inline method=post action="/companies/jobs/inventory"><button class=pri {{ 'disabled' if busy }}>① 盘点（从 ezPLM 厂商表建清单、归重复组、算物料数）</button></form>
+<form class=inline method=post action="/companies/jobs/check"><label class=mute><input type=checkbox name=only_missing value=1 checked> 只查没查过的</label> <button {{ 'disabled' if busy }}>② 抓官网核对</button></form>
+<form class=inline method=post action="/companies/jobs/find" onsubmit="return confirm('没有官网 / 官网打不开的厂商：先按名字猜域名，猜不到用 Gemini（带 Google 搜索）找。每家一次 Gemini 调用。')"><input name=limit value=200 style="width:70px" title="本次最多处理几家（物料多的先）"> <button {{ 'disabled' if busy }}>③ 补缺失官网（Gemini）</button></form>
+<p class=mute>建议值只写在本平台，不动 ezPLM。显示名 = 常用品牌名；法定全称、中文名单独存。每行都可以点进去手工修改。</p></div>
+<form class=filters method=get>
+<input name=q value="{{ q }}" placeholder="名称 / 官网" style="width:200px">
+<select name=view>{% for v, lab in [('','全部（主记录）'),('dup','疑似重复'),('dead','官网打不开'),('redirect_other','官网跳到别家'),('nosite','缺官网'),('acquired','建议已并购'),('changed','建议名称与现名不同'),('hi','高置信（≥0.85）待复核')] %}<option value="{{ v }}" {{ 'selected' if view==v }}>{{ lab }}</option>{% endfor %}</select>
+<select name=status>{% for v, lab in [('pending','待复核'),('approved','已通过'),('rejected','已驳回'),('all','全部')] %}<option value="{{ v }}" {{ 'selected' if status==v }}>{{ lab }}</option>{% endfor %}</select>
+<button class=pri>筛选</button><span class=mute>共 {{ total }} 家</span></form>
+{% if view=='hi' and status=='pending' and total %}<form method=post action="/companies/bulk-approve?{{ qs }}" onsubmit="return confirm('通过筛选出的 {{ total }} 家的建议值？')"><button class=ok>全部通过（{{ total }} 家）</button></form>{% endif %}
+<table><tr><th>物料数</th><th>现名称</th><th>建议显示名 / 全称 / 中文名</th><th>官网（现 → 建议）</th><th>核对</th><th>状态</th><th>置信度</th><th>操作</th></tr>
+{% for r in rows %}<tr class="{{ 'new' if r.review_status=='approved' }}">
+<td><b>{{ r.part_count }}</b>{% if not r.is_primary %}<br><span class=tag>重复</span>{% endif %}</td>
+<td><a href="/companies/{{ r.id }}">{{ r.cur_name }}</a>{% set al = r.cur_aliases|fromjson %}{% if al %}<br><span class=mute style="font-size:12px">{{ al[:4]|join('、') }}</span>{% endif %}</td>
+<td><b>{{ r.p_name or '' }}</b>{% if r.p_legal_name %}<br><span class=mute>{{ r.p_legal_name }}</span>{% endif %}{% if r.p_name_cn %}<br><span class=mute>{{ r.p_name_cn }}</span>{% endif %}</td>
+<td style="max-width:260px;word-break:break-all"><span class=mute>{{ r.cur_website or '空' }}</span>{% if r.p_website and r.p_website.rstrip('/') != (r.cur_website or '').rstrip('/') %}<br>→ <a href="{{ r.p_website }}" target=_blank rel=noopener>{{ r.p_website }}</a>{% endif %}</td>
+<td class="{{ {'ok':'act-auto_fill','blocked':'act-auto_fill','dead':'act-flag_mismatch','redirect_other':'act-review'}.get(r.check_status, 'mute') }}">{{ {'ok':'正常','dead':'打不开','blocked':'拦截脚本','redirect_other':'跳到别家','none':'无官网'}.get(r.check_status, '未查') }}{% if r.http_status %} <span class=mute>{{ r.http_status }}</span>{% endif %}{% if r.site_name or r.legal_seen %}<br><span class=mute style="font-size:12px">{{ r.legal_seen or r.site_name }}</span>{% endif %}</td>
+<td>{{ {'active':'在营','acquired':'已并购','defunct':'已关闭','unknown':'不确定'}.get(r.p_status, '') }}{% if r.p_acquirer %}<br>→ {{ r.p_acquirer }}{% endif %}{% if r.p_merge_into %}<br><span class=mute>建议并入主记录</span>{% endif %}</td>
+<td>{{ '%.2f'|format(r.confidence or 0) }}<br><span class=mute>{{ r.source or '' }}</span></td>
+<td style="white-space:nowrap"><a class=btn href="/companies/{{ r.id }}">修改</a>{% if r.review_status=='pending' %} <form class=inline method=post action="/companies/{{ r.id }}/review?d=approve&next={{ next|urlencode }}"><button class=ok>通过</button></form> <form class=inline method=post action="/companies/{{ r.id }}/review?d=reject&next={{ next|urlencode }}"><button class=bad>驳回</button></form>{% else %}<span class=mute>{{ r.review_status }}</span>{% endif %}</td></tr>{% endfor %}</table>
+<div class=pager>{% if page>1 %}<a href="?{{ qs }}&page={{ page-1 }}">上一页</a>{% endif %}<span>第 {{ page }} 页</span>{% if page*size<total %}<a href="?{{ qs }}&page={{ page+1 }}">下一页</a>{% endif %}</div>
+{% endblock %}"""
+
+COMPANY = """{% extends "base" %}{% block topright %}<span class=mute>ezPLM ID {{ r.id }}</span>{% endblock %}{% block body %}
+<div class=grid2>
+<div class=panel><h2>现值（ezPLM）与核对证据</h2><table class=kv>
+<tr><td>名称</td><td>{{ r.cur_name }}</td></tr><tr><td>别名</td><td>{{ (r.cur_aliases|fromjson)|join('、') or '空' }}</td></tr>
+<tr><td>官网</td><td>{% if r.cur_website %}<a href="{{ r.cur_website if '://' in r.cur_website else 'https://' ~ r.cur_website }}" target=_blank rel=noopener>{{ r.cur_website }}</a>{% else %}空{% endif %}</td></tr>
+<tr><td>类型</td><td>{{ '制造商' if r.is_manufacturer }}{{ ' / 代理商' if r.is_supplier }} · 物料 {{ r.part_count }} 条{% if not r.is_primary %} · <span class=diff>疑似重复</span>{% endif %}</td></tr>
+<tr><td>谱系表</td><td>{{ ('已并购 → ' ~ r.lineage_to) if r.lineage_to else '—' }}</td></tr>
+<tr><td>官网核对</td><td>{{ r.check_status or '未查' }} {{ r.http_status or '' }} {{ r.check_note or '' }}{% if r.final_url %}<br><span class=mute>最终地址：{{ r.final_url }}</span>{% endif %}</td></tr>
+<tr><td>网页标题</td><td>{{ r.page_title or '' }}</td></tr><tr><td>站点名 / 全称</td><td>{{ r.site_name or '' }}{% if r.legal_seen %}<br>{{ r.legal_seen }}{% endif %}</td></tr>
+<tr><td>同组记录</td><td>{% for g in group %}<a href="/companies/{{ g.id }}">{{ g.cur_name }}</a> <span class=mute>({{ g.part_count }} 条{{ '，主记录' if g.is_primary }})</span><br>{% endfor %}</td></tr>
+</table><details><summary class=mute>全部证据</summary><pre style="background:#f3f4f6;color:#111">{{ r.evidence_json or '{}' }}</pre></details></div>
+<div class=panel><h2>建议值（可直接修改）</h2>
+<form class=frm method=post action="/companies/{{ r.id }}/edit">
+<div class=row><div><label>显示名（常用品牌名）</label><input name=p_name value="{{ r.p_name or '' }}"></div><div><label>法定全称</label><input name=p_legal_name value="{{ r.p_legal_name or '' }}"></div></div>
+<div class=row><div><label>中文名</label><input name=p_name_cn value="{{ r.p_name_cn or '' }}"></div><div><label>官网</label><input name=p_website value="{{ r.p_website or '' }}"></div></div>
+<div class=row><div><label>状态</label><select name=p_status>{% for v, lab in [('active','在营'),('acquired','已被并购'),('defunct','已关闭'),('unknown','不确定')] %}<option value="{{ v }}" {{ 'selected' if r.p_status==v }}>{{ lab }}</option>{% endfor %}</select></div>
+<div><label>被谁并购</label><input name=p_acquirer value="{{ r.p_acquirer or '' }}"></div></div>
+<div class=row><div><label>并入（重复记录 → 主记录的 ezPLM ID，空 = 不合并）</label><input name=p_merge_into value="{{ r.p_merge_into or '' }}"></div></div>
+<label>备注</label><input name=notes value="{{ r.notes or '' }}" style="width:100%">
+<p><button class=pri name=action value=save>保存（仍待复核）</button> <button class=ok name=action value=approve>保存并通过</button> <button class=bad name=action value=reject>驳回</button>
+<span class=mute>状态：{{ r.review_status }}{% if r.reviewed_by %} · {{ r.reviewed_by }} {{ r.reviewed_at|local }}{% endif %}</span></p></form>
+<form class=inline method=post action="/companies/{{ r.id }}/recheck"><button {{ 'disabled' if busy }}>按建议官网重新核对</button></form></div></div>
+{% endblock %}"""
+
 env = Environment(loader=DictLoader({"base": BASE, "home": HOME, "jobs": JOBS, "parts": PARTS, "part": PART, "review": REVIEW,
-                                     "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS, "ihsmap": IHSMAP, "reviewgroups": REVIEWGROUPS, "preview": PREVIEW, "previewpage": PREVIEWPAGE}), autoescape=True)
+                                     "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS, "ihsmap": IHSMAP, "reviewgroups": REVIEWGROUPS, "preview": PREVIEW, "previewpage": PREVIEWPAGE, "companies": COMPANIES, "company": COMPANY}), autoescape=True)
 env.globals["pct"] = lambda a, b: round(100.0 * (a or 0) / b, 1) if b else 0
 from .tz import LABEL as _TZ_LABEL, to_local as _to_local
 env.filters["local"] = _to_local                  # 数据库里的 UTC 时间 → 北京时间显示
@@ -946,6 +997,148 @@ def part_set_footprint(pid: str, footprint: str = Form(...), user: str = Depends
                           review_status="approved", reviewed_by=user, reviewed_at=datetime.utcnow(), job="manual"))
     db.commit()
     return back(f"/parts/{pid}", f"新封装已改为 {p.new_footprint}")
+
+
+# ---- 制造商整理
+def _company_query(view: str, status: str, q: str):
+    from .staging import CompanyReview as C
+    stmt = select(C)
+    if view == "dup":
+        dup_keys = select(C.group_key).group_by(C.group_key).having(func.count() > 1)
+        stmt = stmt.where(C.group_key.in_(dup_keys))
+    else:
+        stmt = stmt.where(C.is_primary.is_(True))
+        stmt = {"dead": stmt.where(C.check_status == "dead"), "redirect_other": stmt.where(C.check_status == "redirect_other"),
+                "nosite": stmt.where(C.cur_website.is_(None)), "acquired": stmt.where(C.p_status == "acquired"),
+                "changed": stmt.where(C.p_name.isnot(None), C.p_name != C.cur_name), "hi": stmt.where(C.confidence >= 0.85)}.get(view, stmt)
+    if status != "all":
+        stmt = stmt.where(C.review_status == status)
+    if q:
+        stmt = stmt.where(or_(C.cur_name.ilike(f"%{q}%"), C.cur_website.ilike(f"%{q}%"), C.p_name.ilike(f"%{q}%"), C.cur_aliases.ilike(f"%{q}%")))
+    return stmt
+
+
+@app.get("/companies", response_class=HTMLResponse)
+def companies_page(request: Request, view: str = "", status: str = "pending", q: str = "", page: int = 1, size: int = 50, user: str = Depends(auth)):
+    from . import mfrclean
+    from .staging import CompanyReview as C
+    db = get_session()
+    stmt = _company_query(view, status, q.strip())
+    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar() or 0
+    order = (C.group_key, C.is_primary.desc(), C.part_count.desc()) if view == "dup" else (C.part_count.desc(), C.cur_name)
+    rows = db.execute(stmt.order_by(*order).offset((page - 1) * size).limit(size)).scalars().all()
+    from urllib.parse import quote
+    qs = f"view={view}&status={status}&q={quote(q)}"
+    return render("companies", request, title="制造商整理", nav="companies", user=user, s=mfrclean.summary(db), rows=rows, total=total,
+                  page=page, size=size, view=view, status=status, q=q, qs=qs, next=f"/companies?{qs}&page={page}")
+
+
+@app.get("/companies/export.csv")
+def companies_export(user: str = Depends(auth)):
+    import csv
+    import io
+    from . import mfrclean
+    from .staging import CompanyReview as C
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(mfrclean.EXPORT_COLS)
+    for r in get_session().execute(select(C).order_by(C.part_count.desc())).scalars():
+        w.writerow([getattr(r, k) if getattr(r, k) is not None else "" for k in mfrclean.EXPORT_COLS])
+    return HTMLResponse("﻿" + buf.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=companies_review.csv"})
+
+
+@app.get("/companies/{cid}", response_class=HTMLResponse)
+def company_page(request: Request, cid: str, user: str = Depends(auth)):
+    from .staging import CompanyReview as C
+    db = get_session()
+    r = db.get(C, cid)
+    if not r:
+        raise HTTPException(404)
+    group = db.execute(select(C).where(C.group_key == r.group_key).order_by(C.is_primary.desc(), C.part_count.desc())).scalars().all()
+    return render("company", request, title=r.cur_name or cid, nav="companies", user=user, r=r, group=group)
+
+
+@app.post("/companies/{cid}/edit")
+async def company_edit(request: Request, cid: str, user: str = Depends(auth)):
+    from .staging import CompanyReview as C
+    f = await request.form()
+    db = get_session()
+    r = db.get(C, cid)
+    if not r:
+        raise HTTPException(404)
+    for k in ("p_name", "p_legal_name", "p_name_cn", "p_website", "p_status", "p_acquirer", "p_merge_into", "notes"):
+        if k in f:
+            setattr(r, k, (f.get(k) or "").strip() or None)
+    r.source = "manual"
+    a = f.get("action") or "save"
+    if a in ("approve", "reject"):
+        r.review_status, r.reviewed_by, r.reviewed_at = ("approved" if a == "approve" else "rejected"), user, datetime.utcnow()
+    db.commit()
+    return back(f"/companies/{cid}", {"save": "已保存", "approve": "已保存并通过", "reject": "已驳回"}.get(a, "已保存"))
+
+
+@app.post("/companies/{cid}/review")
+def company_review(cid: str, d: str, next: str = "", user: str = Depends(auth)):
+    from .staging import CompanyReview as C
+    if d not in ("approve", "reject"):
+        raise HTTPException(400)
+    db = get_session()
+    r = db.get(C, cid)
+    if not r:
+        raise HTTPException(404)
+    r.review_status, r.reviewed_by, r.reviewed_at = ("approved" if d == "approve" else "rejected"), user, datetime.utcnow()
+    db.commit()
+    return RedirectResponse(next or "/companies", status_code=303)
+
+
+@app.post("/companies/bulk-approve")
+def companies_bulk_approve(view: str = "", status: str = "pending", q: str = "", user: str = Depends(auth)):
+    db = get_session()
+    n = 0
+    for r in db.execute(_company_query(view, status, q.strip())).scalars():
+        r.review_status, r.reviewed_by, r.reviewed_at = "approved", user, datetime.utcnow()
+        n += 1
+    db.commit()
+    return back(f"/companies?view={view}&status={status}", f"已通过 {n} 家")
+
+
+@app.post("/companies/{cid}/recheck")
+def company_recheck(cid: str, user: str = Depends(auth)):
+    from . import mfrclean
+    from .staging import CompanyReview as C
+    db = get_session()
+    r = db.get(C, cid)
+    if not r:
+        raise HTTPException(404)
+    url = r.p_website or r.cur_website
+    chk = mfrclean.check_one(url) if url else {"status": "none"}
+    r.check_status = "redirect_other" if chk.get("redirected_to") and chk.get("status") in ("ok", "blocked") else chk.get("status")
+    r.http_status, r.final_url, r.page_title, r.check_note = chk.get("http"), chk.get("final_url"), chk.get("title"), chk.get("note")
+    r.site_name, r.legal_seen, r.checked_at = chk.get("site_name") or chk.get("org_name"), chk.get("legal_name") or chk.get("copyright"), datetime.utcnow()
+    db.commit()
+    return back(f"/companies/{cid}", f"核对结果：{r.check_status} {r.http_status or ''}")
+
+
+@app.post("/companies/jobs/{kind}")
+async def companies_jobs(request: Request, kind: str, user: str = Depends(auth)):
+    from . import mfrclean
+    f = await request.form()
+    try:
+        if kind == "inventory":
+            manager.start("companies-inventory", lambda j: mfrclean.inventory(get_session(), log=j.say), {})
+        elif kind == "check":
+            only = bool(f.get("only_missing"))
+            manager.start("companies-check", lambda j: mfrclean.check_all(get_session(), only_missing=only, stop=j.should_stop, log=j.say,
+                                                                         progress=lambda p: j.progress.update(p)), {"only_missing": only})
+        elif kind == "find":
+            lim = int(f.get("limit") or 0) or None
+            manager.start("companies-find", lambda j: mfrclean.find_missing(get_session(), limit=lim, stop=j.should_stop, log=j.say,
+                                                                           progress=lambda p: j.progress.update(p)), {"limit": lim})
+        else:
+            raise HTTPException(400)
+    except RuntimeError as e:
+        return back("/companies", str(e), True)
+    return back("/companies", "已在后台开始，进度见任务控制页；完成后刷新本页")
 
 
 # ---- 复核

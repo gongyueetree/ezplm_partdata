@@ -147,6 +147,46 @@ class EzCompany(Base):
     fetched_at = Column(DateTime, default=datetime.utcnow)
 
 
+class CompanyReview(Base):
+    """厂商整理：每个 ezPLM 厂商一行（同名重复的归到一组，组内物料最多的当主记录）。
+    check_*：抓取官网得到的证据；p_*：建议值（可人工直接改）；review_status：pending / approved / rejected。"""
+    __tablename__ = "company_review"
+    id = Column(String(40), primary_key=True)          # ezPLM 厂商 ID
+    group_key = Column(String(200), index=True)        # 名称比较键；同组 = 疑似重复
+    is_primary = Column(Boolean, default=True)         # 组内主记录（物料最多）
+    cur_name = Column(String(200))
+    cur_aliases = Column(Text)                         # JSON
+    cur_website = Column(String(500))
+    is_manufacturer = Column(Boolean)
+    is_supplier = Column(Boolean)
+    part_count = Column(Integer, default=0)
+    lineage_to = Column(String(200))                   # 谱系表：已被并购 → 当前归属
+    # 官网检查
+    check_status = Column(String(20))                  # ok / dead / error / redirect_other / none
+    http_status = Column(Integer)
+    final_url = Column(Text)
+    site_name = Column(String(300))                    # og:site_name / schema.org name
+    legal_seen = Column(String(300))                   # schema.org legalName / 版权行里的公司名
+    page_title = Column(String(500))
+    check_note = Column(Text)
+    checked_at = Column(DateTime)
+    # 建议值（人工可改）
+    p_name = Column(String(200))                       # 显示名（常用品牌名）
+    p_legal_name = Column(String(300))                 # 法定全称
+    p_name_cn = Column(String(200))                    # 中文名
+    p_website = Column(String(500))
+    p_status = Column(String(20))                      # active / acquired / defunct / unknown
+    p_acquirer = Column(String(200))
+    p_merge_into = Column(String(40))                  # 重复：并入哪个 ezPLM 厂商 ID
+    confidence = Column(Float)
+    source = Column(String(40))                        # site / gemini / manual / lineage
+    evidence_json = Column(Text)
+    review_status = Column(String(20), default="pending", index=True)
+    reviewed_by = Column(String(60))
+    reviewed_at = Column(DateTime)
+    notes = Column(Text)
+
+
 class EzSymbol(Base):
     """ezPLM 符号库清单（/admin-api/symbols）。不少符号以型号命名、派生自通用根符号（root）。"""
     __tablename__ = "ez_symbols"
