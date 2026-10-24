@@ -19,7 +19,7 @@ from .models import Proposal
 from .staging import StagedPart, StagedProposal
 
 # 包装 / 卷带 / 无铅后缀（反复去，最多 3 次）
-_PACK = re.compile(r"(?:[-/#,]?(?:TRPBF|PBF|TR|T&R|REEL7|REEL13|REEL|RL7|RL13|RL|R7|R13|T7|T13|TRL|TRR|NOPB|G4|E4|GE3|HE3|E3|LT1G|LT3G|T1G|T3G)"
+_PACK = re.compile(r"(?:[-/#,]?(?:TRPBF|PBF|TR|T&R|REEL7|REEL13|REEL|RL7|RL13|RL|R7|R13|T7|T13|TRL|TRR|NOPB|G4|E4|GE3|HE3|E3|LT1G|LT3G|T1G|T3G|LT1|LT3)"
                    r"|-(?:7|13)(?:-F)?|-F|-(?:GS)?(?:08|18)|,\d{3})$", re.I)
 _REEL_LETTER = re.compile(r"(?<=[A-Z]{2})[RT]$|(?<=[A-Z])X$", re.I)   # TI DBVR/DBVT（前面至少两个字母，避免 LM317T 这类封装字母）、onsemi …MX
 _MCHP_T = re.compile(r"T(?=-[IEHV]/)", re.I)                     # Microchip 24LC256T-I/SN 的 T = 卷带

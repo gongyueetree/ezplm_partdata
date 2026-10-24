@@ -427,10 +427,17 @@ def mpn_variants(mpn: str) -> list[str]:
     return [norm_name(x) for x in dict.fromkeys(out) if x]
 
 
-def symbol_pattern(sym_name: str) -> re.Pattern:
-    """KiCad 常用 x 作通配（STM32H503KBUx、ZPYxx）。"""
-    n = norm_name(sym_name)
-    return re.compile("^" + "".join(".?" if ch == "X" else re.escape(ch) for ch in n))
+def symbol_pattern(sym_name: str) -> re.Pattern | None:
+    """KiCad 用小写 x 作通配（STM32H503KBUx、BZX84Cxx、MMBZxx）；大写 X 是型号本身的字母（XUX51、BZX84 里的 X）。
+    连续 k 个 x 匹配 1~k+2 个字母数字（BZX84Cxx ↔ 5V1 / 47，MMBZxx ↔ 5V6A），整串必须匹配完。没有小写 x 的不是通配符号，返回 None。"""
+    raw = re.sub(r"[^A-Za-z0-9]", "", sym_name or "")
+    if "x" not in raw:
+        return None
+    out = []
+    for run in re.finditer(r"x+|[^x]+", raw):
+        t = run.group(0)
+        out.append(f"[A-Z0-9]{{1,{len(t) + 2}}}" if t[0] == "x" else re.escape(t.upper()))
+    return re.compile("^" + "".join(out) + "$")
 
 
 class SymbolMatcher:
@@ -443,7 +450,8 @@ class SymbolMatcher:
             for m in re.split(r"\s*[,;]\s*", r[9] or ""):   # 符号 MPN 字段可能列多个料号
                 for v in mpn_variants(m):
                     self.by_mpn_field.setdefault(v, []).append(r)
-        self.wild = [(symbol_pattern(r[0]), r) for r in self.rows if "X" in r[1] and len(r[1]) >= 5]
+        self.wild = [(pat, r) for r in self.rows if len(r[1]) >= 5 and (pat := symbol_pattern(r[0])) is not None
+                     and len(re.sub(r"x", "", re.sub(r"[^A-Za-z0-9]", "", r[0]))) >= 4]     # 去掉通配后至少 4 个确定字符
         self.index = index
 
     def match(self, p: Part) -> list[dict]:
@@ -455,12 +463,11 @@ class SymbolMatcher:
             for r in self.by_norm.get(v, []):
                 cands.append(self._cand(r, 1.0 if v == variants[0] else 0.9, "exact" if v == variants[0] else "suffix-stripped"))
         if not cands:
+            from .symshare import base_mpn
+            wv = list(dict.fromkeys(variants + [base_mpn(p.mpn)]))         # 再加上去掉 -7-F / LT1G 等包装后缀的型号
             for pat, r in self.wild:
-                for v in variants:
-                    m = pat.match(v)
-                    if m and m.end() >= len(v) - 3:
-                        cands.append(self._cand(r, 0.85, "wildcard"))
-                        break
+                if any(pat.match(v) for v in wv):
+                    cands.append(self._cand(r, 0.85, "wildcard"))
         if not cands:                       # 前缀匹配（符号名是型号的前缀，长度≥6）
             v0 = variants[0]
             for r in self.rows:
