@@ -8,7 +8,7 @@
 # hold：命中的物料不出分类建议，只打标签（ezPLM 分类树里还没有合适的叶子分类，近邻只会乱猜）
 hold:
   # 隔离电源模块（金升阳 URB/WRB/H…、致远、恒率；"输出功率 … 转换效率" 或 "转换类型：AC-DC/DC-DC"）
-  - {pattern: "输出功率[:：].{0,40}转换效率|转换类型[:：] ?(AC|DC)-DC|电源模块|隔离电源", tag: "电源模块（缺分类）"}
+  - {pattern: "输出功率[:：].{0,40}转换效率|转换类型[:：] ?(AC|DC)-DC|电源模块|模块电源|DC-?DC ?模块|隔离电源", tag: "电源模块（缺分类）"}
 
 no_flag:
   - {current: "预偏置", proposed: "单双极晶体管"}
@@ -24,7 +24,7 @@ keyword:
   # 处理器描述里常见"支持 DDR2/3 内存"（MPC8536 等被判成存储器），排除处理器类描述
   # 型号里也会出现 DRAM 字样（SICK 料位开关 LBV320-XXTGDRAMX01100 被判成存储器）：英文缩写前后不能紧挨字母/数字
   # （不用 \\b：中文也算单词字符，"DDR3内存" 之间没有 \\b）
-  - {pattern: "动态随机存取存储器|(?<![A-Za-z0-9])(DRAM|SDRAM|DDR[2-5]?L?|LPDDR[2-5]?X?)(?![A-Za-z0-9])", exclude: "缓冲器|驱动器|控制器|寄存器|时钟|Buffer|Controller|Register|处理器|Processor|CPU|主频|内核|核心|PowerQUICC|QorIQ|片上系统|SoC|微控制器|MCU|FPGA|模块|模组|内存条|DIMM|Module|\\d{3} ?针", category: "存储器 > 存储器", conf: 0.95}
+  - {pattern: "动态随机存取存储器|(?<![A-Za-z0-9])(DRAM|SDRAM|DDR[2-5]?L?|LPDDR[2-5]?X?)(?![A-Za-z0-9])", exclude: "稳压|终端|调节器|电源|PWM|Regulator|Termination|VTT|缓冲器|驱动器|控制器|寄存器|时钟|Buffer|Controller|Register|处理器|Processor|CPU|主频|内核|核心|PowerQUICC|QorIQ|片上系统|SoC|微控制器|MCU|FPGA|模块|模组|内存条|DIMM|Module|\\d{3} ?针", category: "存储器 > 存储器", conf: 0.95}
   # 缩写加 ASCII 边界："FRAM" 曾命中 "FRAME"（屏蔽罩框架 BMI-S-209-F）
   - {pattern: "NAND\\s*Flash|NOR\\s*Flash|(?<![A-Za-z])(EEPROM|SRAM|PSRAM|OctalRAM|FRAM|MRAM)(?![A-Za-z])|随机存取存储器|闪存存储器", exclude: "屏蔽|Shield|微控制器|单片机|MCU|Microcontroller|微处理器|Processor|FPGA|CPLD|Cortex|RISC-V|DSP|SoC|模组|模块|Module|开发板", category: "存储器 > 存储器", conf: 0.92}
   - {pattern: "数字隔离器", category: "数字隔离器", conf: 0.95}
@@ -62,9 +62,24 @@ keyword:
   - {pattern: "LED.{0,15}(驱动|Driver|控制器|Controller)|恒流驱动", exclude: "显示|LCD|数码管|点阵|矩阵|Matrix|Display|(\\d|七|八)段|共阴|共阳|键盘扫描", category: "电源管理（PMIC） > LED 驱动器", conf: 0.85}
   - {pattern: "(DC[/-]?DC|降压|升压|Buck|Boost).{0,12}(控制器|Controller)", exclude: "通孔型|表面贴装型|电荷泵|平滑|\\d+ ?小时|充电(?!泵)|功放|音频|Audio|MOSFET ?驱动|MOSFET Driver|电容|Capacitor|沟槽|Trench|MOS技术|[μµu]Module|LED|模块|机箱安装|板安装|[Bb]rick|砖", category: "DC-DC 开关控制器", conf: 0.85}
   - {pattern: "DC[/-]?DC.*(转换器|稳压|开关)|降压|升压|Buck|Boost", exclude: "通孔型|表面贴装型|电荷泵|充电泵|Charge Pump|平滑|\\d+ ?小时|充电(?!泵)|功放|音频|Audio|MOSFET ?驱动|MOSFET Driver|电容|Capacitor|沟槽|Trench|MOS技术|[μµu]Module|LED|控制器|Controller|模块|机箱安装|板安装|[Bb]rick|砖", category: "稳压器 - DC-DC 开关稳压器", conf: 0.85}
-  - {pattern: "电压基准|基准电压", category: "电压基准", conf: 0.9}
+  # ---- 这批复核里混进电压基准 / 存储器 / 触发器等组的器件
+  - {pattern: "多相.{0,6}(PWM|控制器|稳压器)|Multiphase.{0,10}(PWM|Controller)", category: "DC-DC 开关控制器", conf: 0.85}
+  - {pattern: "终端稳压器|VTT|Termination Regulator|DDR.{0,6}终端", category: "电源管理（PMIC） > 特殊用途稳压器", conf: 0.85}
+  - {pattern: "湿度|%RH|湿敏", exclude: "温湿度模块|模块", category: "湿度、湿敏传感器", conf: 0.88}
+  - {pattern: "NTC|负温度系数|热敏电阻", exclude: "PTC|正温度系数", category: "温度传感器 > NTC 热敏电阻", conf: 0.88}
+  - {pattern: "恒流二极管|电流调节二极管|电流稳定二极管|Current Regulat(or|ing) Diode", category: "分立半导体产品 > 电流调节 - 二极管，晶体管", conf: 0.88}
+  - {pattern: "PWM ?控制器|脉宽调制器|脉冲宽度调制控制器|PWM Controller", exclude: "LED|电机|风扇|马达|背光", category: "DC-DC 开关控制器", conf: 0.85}
+  - {pattern: "比较器|Comparator", exclude: "运算放大器|运放|模数|ADC", category: "线性 > 比较器", conf: 0.85}
+  - {pattern: "窗口看门狗|窗口监控|看门狗定时器|Window Watchdog|Watchdog Timer", category: "电源管理（PMIC） > 电源监控器", conf: 0.85}
+  - {pattern: "锁存|Latch", exclude: "锁存继电器|继电器|锁存功能|带锁存", category: "逻辑 > 锁存器", conf: 0.85}
+  - {pattern: "移位寄存器|Shift Register|串入并出|并入串出", category: "逻辑 > 移位寄存器", conf: 0.88}
+  - {pattern: "计数器|分频器|Counter", exclude: "光子|频率计|射频|RF|定时器|计时器", category: "逻辑 > 计数器，除法器", conf: 0.85}
+  - {pattern: "触发器|Flip-?Flop", exclude: "锁存|施密特触发|Schmitt", category: "逻辑 > 触发器", conf: 0.85}
+  - {pattern: "与非门|或非门|异或门|同或门|与门|或门|反相器|缓冲门|(?<![A-Za-z])(NAND|NOR|XOR|XNOR)(?![A-Za-z])|Inverter|Logic Gate", exclude: "电源反相|逆变器|DC-DC|电荷泵|稳压|光耦|驱动器", category: "逻辑 > 门和反相器", conf: 0.85}
+  - {pattern: "电压基准|基准电压", exclude: "PWM|调制|比较器|控制器|稳压器|调节器|电源管理|ADC|DAC|转换器|放大器", category: "电压基准", conf: 0.9}
   # 串联电压基准的参数模板（"输出类型：固定 … 输出电流：5mA 精度：±0.5%"，LM4120/AD1585/MAX6068），LDO 模板带"输出极性/压降/PSRR"
-  - {pattern: "精度[:：] ?±\\s*\\d", exclude: "输出极性|压降|PSRR|纹波|拓扑|输出功率|转换效率|电流检测|温度", category: "电压基准", conf: 0.85}
+  # 只认基准的参数模板（"输出类型：固定/可调 … 精度：±"或"输出电压 … 精度：±"）；电阻、湿度传感器、二极管的"精度"不算
+  - {pattern: "(输出类型[:：] ?(固定|可调)|输出电压[:：]).{0,80}精度[:：] ?±\\s*\\d", exclude: "输出极性|压降|PSRR|纹波|拓扑|输出功率|转换效率|电流检测|温度|湿度|RH|电阻|热敏|NTC|PWM|电机|比较器|二极管", category: "电压基准", conf: 0.85}
   # 电压检测/复位芯片（APX803、TPS38x、MAX809 一类）：近邻常把它们猜成电压基准
   - {pattern: "电压检测器|电压监测器|电压监控器|复位芯片|复位IC|复位电路|上电复位|微处理器监控|看门狗|Supervisor|Voltage Detector|Reset IC|Watchdog", exclude: "电流|电池管理|电量|温度", category: "电源管理（PMIC） > 电源监控器", conf: 0.88}
   - {pattern: "运算放大器|运放|仪表放大器|Op ?Amp", category: "仪器，运算放大器，缓冲器", conf: 0.85}
@@ -115,6 +130,7 @@ mpn:
   - {manufacturer: "Texas Instruments", pattern: "^TPS(5|6)", category: "稳压器 - DC-DC 开关稳压器", conf: 0.8}
   - {manufacturer: "Texas Instruments", pattern: "^MSP430", category: "微控制器（MCU）", conf: 0.97}
   - {manufacturer: "Texas Instruments|Infineon", pattern: "^CY2[0-9]", category: "时钟发生器，PLL，频率合成器", conf: 0.9}   # Cypress 零延迟缓冲/展频时钟（描述只写"扇出缓冲器"），归时钟发生器
+  - {manufacturer: "Infineon|Cypress", pattern: "^CY8CMBR", category: "数据采集 > 触摸屏控制器", conf: 0.85}   # CapSense 触摸控制器（固定功能，不是 MCU）
   - {manufacturer: "Infineon", pattern: "^CY8C", category: "微控制器（MCU）", conf: 0.95}
   - {manufacturer: "天微|Titan|^TM|中微爱芯|i-?Core", pattern: "^(TM|AIP)16\\d\\d", category: "电源管理（PMIC） > 显示驱动器", conf: 0.85}   # TM1617/1629/1651、AiP1629 数码管驱动
   - {manufacturer: "晶丰明源|Bright ?Power|BPS", pattern: "^BP(23|99)\\d\\d", category: "电源管理（PMIC） > LED 驱动器", conf: 0.92}   # BP2329/BP9911 等描述只写"拓扑结构：降压"
@@ -122,6 +138,9 @@ mpn:
   - {manufacturer: "Skyworks|Silicon Lab|芯科", pattern: "^SI533\\d{2}", category: "时钟缓冲器，驱动器，分配器", conf: 0.9}
   - {manufacturer: "Skyworks|Silicon Lab|芯科", pattern: "^SI53\\d{2}(?!\\d)|^SI52\\d{3}", category: "时钟发生器，PLL，频率合成器", conf: 0.9}
   - {manufacturer: "ROHM|罗姆", pattern: "^DA[NP]2\\d\\d", category: "整流器 > 二极管阵列", conf: 0.9}   # 罗姆 DAN202/DAP202：双开关二极管（共阴/共阳）
+  - {pattern: "^(JANTXV|JANTX|JAN)?1N5(28[3-9]|29\\d|30\\d|31[0-4])", category: "分立半导体产品 > 电流调节 - 二极管，晶体管", conf: 0.92}   # 1N5283~1N5314 恒流二极管
+  - {pattern: "^(SG|LM|UC)[123]17(?![0-9])", category: "稳压器 - 线性稳压器控制器", conf: 0.85}   # LM117/317 系可调线性稳压器
+  - {pattern: "^(SG|UC|KA|TL)[0-9]?(524|525|526|527)[A-Z]?", category: "DC-DC 开关控制器", conf: 0.85}   # SG2524/3524 一类 PWM 控制器
   - {pattern: "^(LTC1044|ICL766[02]|MAX1044|MAX66[0-5]|TC766[02]|TC962|LT1054|LM266[0-3]|LM828|LM2766)", category: "电源管理（PMIC） > 电荷泵", conf: 0.9}   # 经典电压反相/倍压电荷泵（描述常为空）
   - {manufacturer: "onsemi|ON Semi", pattern: "^NSB[AC]\\d{3}\\w*D(XV6|P6)", category: "双极晶体管阵列，预偏置", conf: 0.85}   # 双路带电阻晶体管
   - {manufacturer: "Infineon", pattern: "^(AU)?IRF", category: "单 FET，MOSFET", conf: 0.93}

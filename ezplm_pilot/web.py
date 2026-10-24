@@ -234,7 +234,7 @@ PARTS = """{% extends "base" %}{% block body %}
 <input name=tag value="{{ tag }}" placeholder="标签" style="width:140px"><button class=pri>筛选</button><span class=mute>共 {{ total }} 条</span></form>
 <table><tr><th>型号</th><th>制造商</th><th>描述</th><th>分类（原 → 新）</th><th>待复核建议</th><th>符号</th><th>封装</th><th>PDF</th><th>标签</th><th>分</th></tr>
 {% for p in rows %}<tr>
-<td><a href="/parts/{{ p.id }}">{{ p.mpn }}</a></td><td class=mute>{{ p.manufacturer }}</td><td class=mute style="max-width:280px">{{ (p.description or '')[:90] }}</td>
+<td><a href="/parts/{{ p.id }}">{{ p.mpn }}</a>{% set u = (p.new_url or p.orig_url)|href %}{% if u %}<br><a href="{{ u }}" target=_blank rel="noopener noreferrer" style="font-size:12px" title="{{ u }}">官网 ↗</a>{% endif %}</td><td class=mute>{{ p.manufacturer }}</td><td class=mute style="max-width:280px">{{ (p.description or '')[:90] }}</td>
 <td style="max-width:220px">{{ paths.get(p.orig_category_id) or '<span class=mute>空</span>'|safe }}{% if p.new_category_id %}<br>→ <span class=diff>{{ paths.get(p.new_category_id, p.new_category) }}</span>{% endif %}</td>
 <td style="max-width:220px">{% for s in sugg.get(p.id, []) %}<div><span class=mute>{{ s.field }}</span> {{ s.proposed_label or s.proposed }} <span class=mute>{{ '%.2f'|format(s.confidence or 0) }}</span></div>{% endfor %}</td>
 <td>{{ p.orig_symbol or '' }}{% if p.new_symbol %}<span class=diff> → {{ p.new_symbol }}</span>{% endif %}</td>
@@ -252,8 +252,8 @@ PART = """{% extends "base" %}{% import "preview" as P %}{% block topright %}<sp
 <tr><td>分类</td><td>{{ tax.path(p.orig_category_id) if p.orig_category_id in tax.nodes else (p.orig_category or '空') }}{% if p.new_category_id %}<br>→ <span class=diff>{{ tax.path(p.new_category_id) }}</span>{% endif %}</td></tr>
 <tr><td>符号</td><td>{{ p.orig_symbol or '空' }} {{ ('→ <span class=diff>'+p.new_symbol+'</span>')|safe if p.new_symbol }}</td></tr>
 <tr><td>封装</td><td>{{ p.orig_footprint or '空' }} {{ ('→ <span class=diff>'+p.new_footprint+'</span>')|safe if p.new_footprint }}</td></tr>
-<tr><td>官网链接</td><td>{{ p.orig_url or '空' }} {% if p.new_url %}→ <a class=diff href="{{ p.new_url }}" target=_blank>{{ p.new_url }}</a>{% endif %}</td></tr>
-<tr><td>数据手册</td><td>{{ '有 PDF' if p.orig_has_pdf else '无' }} {% if p.new_datasheet %}→ <a class=diff href="{{ p.new_datasheet }}" target=_blank>{{ p.new_datasheet }}</a>{% endif %}</td></tr>
+<tr><td>官网链接</td><td style="word-break:break-all">{% if p.orig_url|href %}<a href="{{ p.orig_url|href }}" target=_blank rel="noopener noreferrer">{{ p.orig_url }}</a>{% else %}空{% endif %} {% if p.new_url|href %}→ <a class=diff href="{{ p.new_url|href }}" target=_blank rel="noopener noreferrer">{{ p.new_url }}</a>{% endif %}</td></tr>
+<tr><td>数据手册</td><td style="word-break:break-all">{{ '有 PDF' if p.orig_has_pdf else '无' }} {% if p.new_datasheet|href %}→ <a class=diff href="{{ p.new_datasheet|href }}" target=_blank rel="noopener noreferrer">{{ p.new_datasheet }}</a>{% endif %}</td></tr>
 <tr><td>标签</td><td>{% for t in (p.tags or '').split(',') if t %}<span class=tag>{{ t }}</span>{% endfor %}</td></tr>
 <tr><td>状态</td><td>处理 {{ p.processed_at|local or '未' }} · 回写 {{ p.exported_at|local or '未' }} · 价值分 {{ p.value_score }}</td></tr>
 </table></div>
@@ -290,7 +290,7 @@ PART = """{% extends "base" %}{% import "preview" as P %}{% block topright %}<sp
 <div class=panel><h2>建议与复核</h2>
 <table><tr><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>状态</th><th>操作</th><th>证据</th></tr>
 {% for r in props %}<tr class="{{ 'new' if r.review_status in ('auto','approved') }}">
-<td>{{ r.field }}</td><td class=mute>{{ r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b>{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/preview?sym={{ ev.sha256 }}" target=_blank>预览</a> · <a href="/symbol-files/{{ ev.sha256 }}" class=mute>下载 .kicad_sym（{{ ev.pin_count }} 脚，{{ ev.sources|join('+') }}）</a>{% elif r.field=='symbol' and r.proposed %}<br><a href="/preview?symname={{ r.proposed|urlencode }}" target=_blank>预览</a>{% elif r.field=='footprint' %}<br><a href="/preview?fp={{ r.proposed|urlencode }}" target=_blank>预览</a>{% endif %}{% if 'conflict' in ev %}<br><span class=diff>与其它来源引脚不一致：{% for x in ev.conflict %}{{ x.source }} {{ x.pin_count }} 脚{% if not loop.last %}，{% endif %}{% endfor %}</span>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
+<td>{{ r.field }}</td><td class=mute style="word-break:break-all">{% if r.field in ('url','datasheet') and r.current|href %}<a href="{{ r.current|href }}" target=_blank rel="noopener noreferrer">{{ r.current }}</a>{% else %}{{ r.current or '空' }}{% endif %}</td><td style="word-break:break-all">{% if r.field in ('url','datasheet') and r.proposed|href %}<a href="{{ r.proposed|href }}" target=_blank rel="noopener noreferrer"><b>{{ r.proposed_label or r.proposed }}</b></a>{% else %}<b>{{ r.proposed_label or r.proposed }}</b>{% endif %}{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/preview?sym={{ ev.sha256 }}" target=_blank>预览</a> · <a href="/symbol-files/{{ ev.sha256 }}" class=mute>下载 .kicad_sym（{{ ev.pin_count }} 脚，{{ ev.sources|join('+') }}）</a>{% elif r.field=='symbol' and r.proposed %}<br><a href="/preview?symname={{ r.proposed|urlencode }}" target=_blank>预览</a>{% elif r.field=='footprint' %}<br><a href="/preview?fp={{ r.proposed|urlencode }}" target=_blank>预览</a>{% endif %}{% if 'conflict' in ev %}<br><span class=diff>与其它来源引脚不一致：{% for x in ev.conflict %}{{ x.source }} {{ x.pin_count }} 脚{% if not loop.last %}，{% endif %}{% endfor %}</span>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
 <td class="act-{{ r.action }}">{{ r.action }}</td><td class=mute>{{ r.method }}</td><td>{{ r.review_status }}{% if r.reviewed_by %}<br><span class=mute>{{ r.reviewed_by }} {{ r.reviewed_at|local }}</span>{% endif %}</td>
 <td style="white-space:nowrap">{% if r.review_status=='pending' %}<form class=inline method=post action="/review/{{ r.id }}/approve"><button class=ok>通过</button></form> <form class=inline method=post action="/review/{{ r.id }}/reject"><button class=bad>驳回</button></form>
 {% elif r.review_status=='auto' %}<form class=inline method=post action="/review/{{ r.id }}/revert"><button class=bad>撤销自动写入</button></form>{% endif %}</td>
@@ -326,7 +326,7 @@ REVIEW = """{% extends "base" %}{% block topright %}<a class=btn href="/review/g
 </div>{% endif %}
 <table><tr><th>型号</th><th>制造商</th><th>描述</th><th>字段</th><th>现值</th><th>建议值</th><th>置信度</th><th>动作</th><th>方法</th><th>操作</th></tr>
 {% for r,p in rows %}<tr>
-<td><a href="/parts/{{ p.id }}">{{ p.mpn }}</a></td><td class=mute>{{ p.manufacturer }}{% if p.manufacturer and status=='pending' %}<br><a href="/review?field={{ r.field }}&status=pending&mfr={{ p.manufacturer|urlencode }}&proposed={{ r.proposed|urlencode }}&cat={{ p.cat_id|urlencode }}" title="同厂商、同分类、同建议值的全部待复核建议（可整批通过/驳回）" style="font-size:12px">同类批量 →</a>{% endif %}</td><td class=mute style="max-width:260px">{{ (p.description or '')[:80] }}</td>
+<td><a href="/parts/{{ p.id }}">{{ p.mpn }}</a>{% set u = (p.new_url or p.orig_url)|href %}{% if u %}<br><a href="{{ u }}" target=_blank rel="noopener noreferrer" style="font-size:12px" title="{{ u }}">官网 ↗</a>{% endif %}</td><td class=mute>{{ p.manufacturer }}{% if p.manufacturer and status=='pending' %}<br><a href="/review?field={{ r.field }}&status=pending&mfr={{ p.manufacturer|urlencode }}&proposed={{ r.proposed|urlencode }}&cat={{ p.cat_id|urlencode }}" title="同厂商、同分类、同建议值的全部待复核建议（可整批通过/驳回）" style="font-size:12px">同类批量 →</a>{% endif %}</td><td class=mute style="max-width:260px">{{ (p.description or '')[:80] }}</td>
 <td>{{ r.field }}</td><td class=mute>{{ r.current_label or r.current or '空' }}</td><td><b>{{ r.proposed_label or r.proposed }}</b>{% if r.field=='symbol' %}{% set ev = r.evidence_json|fromjson %}{% if ev.sha256 %}<br><a href="/preview?sym={{ ev.sha256 }}" target=_blank title="打开预览"><img src="/symbol-files/{{ ev.sha256 }}/preview.svg" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;background:#fff;margin-top:4px" onerror="this.remove()"></a>{% elif r.proposed %}<br><a href="/preview?symname={{ r.proposed|urlencode }}" target=_blank title="打开预览"><img src="/symbols/preview.svg?name={{ r.proposed|urlencode }}" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;background:#fff;margin-top:4px" onerror="this.remove()"></a>{% endif %}{% elif r.field=='footprint' and r.proposed %}<br><a href="/preview?fp={{ r.proposed|urlencode }}" target=_blank title="打开预览"><img src="/footprints/preview.svg?name={{ r.proposed|urlencode }}" loading=lazy style="max-height:90px;max-width:240px;border:1px solid var(--line);border-radius:4px;margin-top:4px" onerror="this.remove()"></a>{% endif %}</td><td>{{ '%.2f'|format(r.confidence or 0) }}</td>
 <td class="act-{{ r.action }}">{{ r.action }}</td><td class=mute>{{ r.method }}</td>
 <td style="white-space:nowrap">{% if r.review_status=='pending' %}<form class=inline method=post action="/review/{{ r.id }}/approve?next={{ next|urlencode }}"><button class=ok>通过</button></form> <form class=inline method=post action="/review/{{ r.id }}/reject?next={{ next|urlencode }}"><button class=bad>驳回</button></form>
@@ -617,7 +617,18 @@ env = Environment(loader=DictLoader({"base": BASE, "home": HOME, "jobs": JOBS, "
                                      "categories": CATEGORIES, "params": PARAMS, "library": LIBRARY, "libitem": LIBITEM, "libupload": LIBUPLOAD, "export": EXPORT, "settings": SETTINGS, "ihsmap": IHSMAP, "reviewgroups": REVIEWGROUPS, "preview": PREVIEW, "previewpage": PREVIEWPAGE, "companies": COMPANIES, "company": COMPANY}), autoescape=True)
 env.globals["pct"] = lambda a, b: round(100.0 * (a or 0) / b, 1) if b else 0
 from .tz import LABEL as _TZ_LABEL, to_local as _to_local
-env.filters["local"] = _to_local                  # 数据库里的 UTC 时间 → 北京时间显示
+env.filters["local"] = _to_local
+
+
+def _href(u):
+    """链接安全化：只放行 http(s)；没写协议的补 https://（ezPLM 里有 "www.ti.com/..." 这种）。"""
+    u = (u or "").strip()
+    if not u or re.match(r"^(javascript|data|vbscript):", u, re.I):
+        return ""
+    return u if re.match(r"^https?://", u, re.I) else "https://" + u.lstrip("/")
+
+
+env.filters["href"] = _href                  # 数据库里的 UTC 时间 → 北京时间显示
 
 
 def _fromjson(s):
