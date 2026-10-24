@@ -37,7 +37,7 @@ rules:
      pkg: "(?<![A-Za-z0-9])SOT-?23(-3)?(?![-\\d])", pins: [3], symbol: "platform:Q_PMOS_GSD", conf: 0.86}
   # ---------------- 两脚二极管 / LED（多脚、阵列的走专用）
   # SOT-23 单齐纳：BZX84C / MMBZ52xxB / AZ23? 均为 1=A、2=NC、3=K，正好是 KiCad Diode:BZX84Cxx 的引脚（双齐纳 MMBZ5V6AL 等是共阳，不在内）
-  - {path: "^分立半导体产品 > 二极管(?!.*(阵列|桥))", desc: "齐纳|稳压|Zener", exclude: "双|Dual|共阳|共阴|阵列", mpn: "^(BZX84[BC]|MMBZ52\\d{2}[ABC]?(?![A-Z]{2}))",
+  - {path: "^分立半导体产品 > 二极管(?!.*(阵列|桥))", desc: "齐纳|稳压|Zener", exclude: "双|Dual|共阳|共阴|阵列", mpn: "^(BZX84[BC]|MMBZ52\\d{2}[ABC]?)",
      pkg: "(?<![A-Za-z0-9])SOT-?23(-3)?(?![-\\d])", pins: [3], symbol: "Diode:BZX84Cxx", conf: 0.88}
   - {path: "^分立半导体产品 > 二极管(?!.*(阵列|桥))", desc: "肖特基|Schottky", exclude: "阵列|双|Dual|共阴|共阳|Array|桥", pins: [2], symbol: "Device:D_Schottky", conf: 0.88}
   - {path: "^分立半导体产品 > 二极管(?!.*(阵列|桥))", desc: "齐纳|稳压|Zener", exclude: "阵列|双|Dual|共阴|共阳|Array|桥", pins: [2], symbol: "Device:D_Zener", conf: 0.88}
